@@ -179,6 +179,10 @@ return {
       return copyableJson(b)
     }
 
+    function logErr(where) {
+      return (e) => { try { console.error('[sseye] ' + where + ' failed:', e && e.message ? e.message : String(e)) } catch (_) {} }
+    }
+
     function pull() {
       host.call('list').then((items) => {
         const arr = Array.isArray(items) ? items : []
@@ -189,7 +193,7 @@ return {
           store.items = arr
           store.emit()
         }
-      }).catch(() => {})
+      }).catch(logErr('list'))
       if (store.selectedId) {
         const cur = store.detail
         if (!cur || cur.id !== store.selectedId || cur.status === 'running') {
@@ -198,7 +202,7 @@ return {
               store.detail = d
               store.emit()
             }
-          }).catch(() => {})
+          }).catch(logErr('get'))
         }
       }
     }
@@ -208,7 +212,7 @@ return {
       host.call('set-policy', patch).then((p) => {
         if (p) store.policy = p
         store.emit()
-      }).catch(() => {})
+      }).catch(logErr('set-policy'))
     }
 
     function dot(status) {
@@ -291,7 +295,7 @@ return {
             store.selectedId = it.id
             store.detail = null
             store.emit()
-            host.call('get', { id: it.id }).then((d) => { if (d) store.detail = d; store.emit() }).catch(() => {})
+            host.call('get', { id: it.id }).then((d) => { if (d) store.detail = d; store.emit() }).catch(logErr('get:select'))
           },
         }))) : null)
     }
@@ -367,13 +371,20 @@ return {
       if (Array.isArray(req.messages)) {
         const shared = typeof d.sharedPrefix === 'number' ? d.sharedPrefix : 0
         const newCount = req.messages.length - shared
+        const DIRECT_TAIL = 30
         const msgKids = [h('div', { key: 'h', className: 'sseye-sec-title' }, 'Messages（共 ' + req.messages.length + ' 条' + (shared > 0 ? ' · 与前序共享 ' + shared + ' 条' : '') + (shared > 0 ? ' · 新增 ' + newCount + ' 条' : '') + '）')]
         if (shared > 0) {
           msgKids.push(h(Section, { key: 'shared', title: '与前一次调用共享的前 ' + shared + ' 条消息（点击展开）' },
             req.messages.slice(0, shared).map((m, i) => h(MessageView, { key: i, m: m }))))
         }
-        req.messages.slice(shared).forEach((m, i) => {
-          msgKids.push(h(MessageView, { key: 'n' + i, m: m, isNew: shared > 0 }))
+        const tail = req.messages.slice(shared)
+        const folded = tail.length > DIRECT_TAIL ? tail.length - DIRECT_TAIL : 0
+        if (folded > 0) {
+          msgKids.push(h(Section, { key: 'older', title: '更早的 ' + folded + ' 条消息（点击展开）' },
+            tail.slice(0, folded).map((m, i) => h(MessageView, { key: 'o' + i, m: m }))))
+        }
+        tail.slice(folded).forEach((m, i) => {
+          msgKids.push(h(MessageView, { key: 'n' + i, m: m, isNew: shared > 0 && folded === 0 }))
         })
         kids.push(h('div', { key: 'msgs', className: 'sseye-sec' }, msgKids))
       } else if (req.messagesOmitted) {
@@ -473,7 +484,7 @@ return {
             onClick: () => {
               store.showPolicy = !store.showPolicy
               if (store.showPolicy && !store.policy) {
-                host.call('get-policy').then((p) => { if (p) store.policy = p; store.emit() }).catch(() => {})
+                host.call('get-policy').then((p) => { if (p) store.policy = p; store.emit() }).catch(logErr('get-policy'))
               }
               store.emit()
             },
@@ -481,7 +492,7 @@ return {
           h('button', {
             className: 'sseye-btn',
             onClick: () => {
-              host.call('clear').then(() => { store.items = []; store.selectedId = null; store.detail = null; store.emit() }).catch(() => {})
+              host.call('clear').then(() => { store.items = []; store.selectedId = null; store.detail = null; store.emit() }).catch(logErr('clear'))
             },
           }, '清空'),
           h('button', {
