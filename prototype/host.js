@@ -12,6 +12,12 @@ const policy = {
   redactions: [],
 }
 
+const PROTOCOLS = {
+  'deepseek-official': 'OpenAI Chat Completions',
+  'ollama-cloud': 'Ollama /api/chat (NDJSON)',
+  'newapi': 'OpenAI-compatible (NewAPI)',
+}
+
 function sourceOf(options) {
   if (options.purpose === 'compaction') return 'compaction'
   if (options.purpose === 'session-title') return 'title'
@@ -146,8 +152,15 @@ function previewOf(rec) {
       }
     }
   }
+  return ''
+}
+
+function replyPreviewOf(rec) {
   for (const b of rec.blocks.values()) {
     if (b.text) return b.text.slice(0, 80)
+  }
+  for (const b of rec.blocks.values()) {
+    if (b.toolName) return '[tool] ' + b.toolName
   }
   return ''
 }
@@ -164,7 +177,10 @@ function summary(rec) {
     messageCount: rec.request.messageCount,
     toolCount: rec.request.toolCount,
     preview: previewOf(rec),
+    replyPreview: replyPreviewOf(rec),
   }
+  const proto = PROTOCOLS[rec.request.provider]
+  if (proto) out.protocol = proto
   if (rec.sessionId !== undefined) out.sessionId = rec.sessionId
   if (rec.turn !== undefined) out.turn = rec.turn
   if (rec.step !== undefined) out.step = rec.step
@@ -174,6 +190,28 @@ function summary(rec) {
   if (rec.firstChunkAt) out.ttftMs = rec.firstChunkAt - rec.startedAt
   if (rec.endedAt) out.durationMs = rec.endedAt - rec.startedAt
   return out
+}
+
+function sharedPrefixCount(rec) {
+  if (!rec.sessionId || !Array.isArray(rec.request.messages)) return 0
+  const idx = records.indexOf(rec)
+  if (idx <= 0) return 0
+  const b = rec.request.messages
+  for (let i = idx - 1; i >= 0; i--) {
+    const prev = records[i]
+    if (prev.sessionId !== rec.sessionId || !Array.isArray(prev.request.messages)) continue
+    const a = prev.request.messages
+    let n = 0
+    const max = Math.min(a.length, b.length)
+    while (n < max) {
+      let sa, sb
+      try { sa = JSON.stringify(a[n]); sb = JSON.stringify(b[n]) } catch (e) { break }
+      if (sa !== sb) break
+      n++
+    }
+    return n
+  }
+  return 0
 }
 
 function wireOf(req) {
@@ -196,6 +234,7 @@ function detail(rec) {
   out.request = rec.request
   out.wire = wireOf(rec.request)
   out.blocks = Array.from(rec.blocks.values()).sort((a, b) => a.index - b.index)
+  out.sharedPrefix = sharedPrefixCount(rec)
   out.policyEcho = cloneJson(policy)
   return out
 }

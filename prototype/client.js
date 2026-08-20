@@ -12,16 +12,16 @@ return {
       detail: null,
       policy: null,
       showPolicy: false,
+      openGroups: {},
+      sessionId: null,
+      onlyThisSession: true,
       listeners: new Set(),
       emit() {
         for (const f of Array.from(this.listeners)) { try { f() } catch (e) {} }
       },
     }
 
-    // Material Symbols 图标字体
-    styles.insert('@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");')
-
-    styles.insert('\n.sseye-fab{width:100%;height:49px;color:var(--dsw-alias-label-primary,#d7dbe0);cursor:pointer;background:none;border:none;border-radius:12px;display:inline-flex;align-items:center;gap:8px;padding:0 8px 0 6px;font-family:inherit;font-size:14px;text-align:left}\n.sseye-fab:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,137,150,.14))}\n.sseye-fab[data-active]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,137,150,.14));color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-fab svg{flex:none;width:20px;height:20px}\n.sseye-fab-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n.sseye-panel{position:fixed;top:0;right:0;bottom:0;width:600px;max-width:94vw;background:var(--dsw-alias-bg-base,#14161a);color:var(--dsw-alias-label-primary,#d7dbe0);border-left:1px solid var(--dsw-alias-border-l1,#262b31);z-index:1000;display:flex;flex-direction:column;font-size:12px;box-shadow:var(--dsw-shadow-lv2,-12px 0 32px rgba(0,0,0,.45))}\n.sseye-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#262b31);flex:none}\n.sseye-title{font-weight:600;font-size:13px}\n.sseye-count{color:var(--dsw-alias-label-tertiary,#8b949e)}\n.sseye-spacer{flex:1}\n.sseye-btn{font:inherit;font-size:12px;padding:2px 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2,rgba(127,137,150,.35));background:transparent;color:inherit;cursor:pointer}\n.sseye-btn:hover{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-body{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}\n.sseye-listcol{flex:1;overflow-y:auto;min-height:0}\n.sseye-row{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#1d2126);cursor:pointer}\n.sseye-row:hover{background:var(--dsw-alias-interactive-bg-hover,#1a1e24)}\n.sseye-row.sel{background:var(--dsw-alias-interactive-bg-hover,#1c2430)}\n.sseye-dot{width:8px;height:8px;border-radius:50%;flex:none}\n.sseye-model{color:var(--dsw-alias-label-primary,#e6edf3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}\n.sseye-dim{color:var(--dsw-alias-label-tertiary,#8b949e);white-space:nowrap}\n.sseye-prev{color:var(--dsw-alias-label-tertiary,#8b949e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}\n.sseye-detail{flex:1.4;min-height:0;overflow-y:auto;padding:8px 12px;border-top:1px solid var(--dsw-alias-border-l2,#262b31)}\n.sseye-sec{margin-bottom:10px}\n.sseye-sec-title{font-weight:600;color:var(--dsw-alias-label-secondary,#9fb4c7);margin-bottom:4px}\n.sseye-pre{background:var(--dsw-alias-markdown-code-block,#0d1117);border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:6px;padding:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow-y:auto;margin:4px 0}\n.sseye-chip{display:inline-block;padding:0 6px;border-radius:4px;background:var(--dsw-alias-button-ghost-active-fill,#21262d);color:var(--dsw-alias-label-secondary,#9fb4c7);margin-right:6px;font-size:11px}\n.sseye-reason{color:var(--dsw-alias-label-tertiary,#8b949e);font-style:italic}\n.sseye-err{color:var(--dsw-alias-state-error-primary,#e5534b)}\n.sseye-policy{padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#262b31);background:var(--dsw-alias-bg-secondary,#171a1f);flex:none}\n.sseye-policy label{display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;white-space:nowrap}\n.sseye-textarea{width:100%;box-sizing:border-box;background:var(--dsw-alias-markdown-code-block,#0d1117);color:var(--dsw-alias-label-primary,#d7dbe0);border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:6px;font:inherit;font-size:11px;padding:6px;margin-top:6px}\n.sseye-empty{padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary,#8b949e)}\n.sseye-msg{margin-bottom:6px}\n.sseye-expand{font-family:'Material Symbols Rounded';font-size:18px;line-height:1;display:inline-block;transition:transform .15s;user-select:none}\ndetails[open] .sseye-expand{transform:rotate(90deg)}\n.sseye-sec-title{display:flex;align-items:center;gap:4px;cursor:pointer;list-style:none}\n.sseye-sec-title::-webkit-details-marker{display:none}\n')
+    styles.insert('\n.sseye-hbtn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2,rgba(127,137,150,.35));background:transparent;color:var(--dsw-alias-label-secondary,#9fb4c7);cursor:pointer;line-height:20px}\n.sseye-hbtn:hover{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-hbtn[data-active]{background:var(--dsw-alias-state-business-primary,#4f8cff);border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:#fff}\n.sseye-hbtn svg{width:15px;height:15px}\n.sseye-panel{position:fixed;top:0;right:0;bottom:0;width:660px;max-width:94vw;background:var(--dsw-alias-bg-base,#14161a);color:var(--dsw-alias-label-primary,#d7dbe0);border-left:1px solid var(--dsw-alias-border-l1,#262b31);z-index:1000;display:flex;flex-direction:column;font-size:12px;box-shadow:var(--dsw-shadow-lv2,-12px 0 32px rgba(0,0,0,.45))}\n.sseye-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#262b31);flex:none}\n.sseye-title{font-weight:600;font-size:13px}\n.sseye-count{color:var(--dsw-alias-label-tertiary,#8b949e)}\n.sseye-spacer{flex:1}\n.sseye-btn{font:inherit;font-size:12px;padding:2px 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2,rgba(127,137,150,.35));background:transparent;color:inherit;cursor:pointer}\n.sseye-btn:hover{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-btn[data-active]{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-body{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}\n.sseye-listcol{flex:1;overflow-y:auto;min-height:0;padding:4px 0}\n.sseye-tgroup{margin:2px 8px 6px;border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-secondary,rgba(255,255,255,.015))}\n.sseye-tgh{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;background:var(--dsw-alias-bg-secondary,#171a1f);user-select:none}\n.sseye-tgh:hover{background:var(--dsw-alias-interactive-bg-hover,#1a1e24)}\n.sseye-tgh-title{font-weight:600;color:var(--dsw-alias-label-primary,#e6edf3);white-space:nowrap}\n.sseye-tgh-prev{color:var(--dsw-alias-label-tertiary,#8b949e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-style:italic}\n.sseye-tgh-agg{color:var(--dsw-alias-label-tertiary,#8b949e);white-space:nowrap;font-variant-numeric:tabular-nums}\n.sseye-chev{font-family:var(--sseye-icon-font,inherit);font-size:16px;line-height:1;display:inline-block;transition:transform .15s;user-select:none;color:var(--dsw-alias-label-tertiary,#8b949e);flex:none}\n.sseye-chev.open{transform:rotate(90deg)}\n.sseye-steps{border-top:1px solid var(--dsw-alias-border-l2,#21262d)}\n.sseye-row{display:flex;align-items:center;gap:8px;padding:5px 10px 5px 22px;border-bottom:1px solid var(--dsw-alias-border-l2,#1d2126);cursor:pointer;position:relative}\n.sseye-row:last-child{border-bottom:none}\n.sseye-row::before{content:"";position:absolute;left:10px;top:0;bottom:0;width:1px;background:var(--dsw-alias-border-l2,#2a2e33)}\n.sseye-row:hover{background:var(--dsw-alias-interactive-bg-hover,#1a1e24)}\n.sseye-row.sel{background:var(--dsw-alias-interactive-bg-hover,#1c2430)}\n.sseye-dot{width:7px;height:7px;border-radius:50%;flex:none}\n.sseye-stepchip{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#9fb4c7);font-weight:600;white-space:nowrap;min-width:34px}\n.sseye-model{color:var(--dsw-alias-label-primary,#e6edf3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}\n.sseye-dim{color:var(--dsw-alias-label-tertiary,#8b949e);white-space:nowrap;font-variant-numeric:tabular-nums}\n.sseye-prev{color:var(--dsw-alias-label-tertiary,#8b949e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}\n.sseye-detail{flex:1.4;min-height:0;overflow-y:auto;padding:10px 14px;border-top:1px solid var(--dsw-alias-border-l2,#262b31)}\n.sseye-sec{margin-bottom:12px}\n.sseye-sec-title{font-weight:600;color:var(--dsw-alias-label-secondary,#9fb4c7);margin-bottom:4px;display:flex;align-items:center;gap:4px;cursor:pointer;list-style:none}\n.sseye-sec-title::-webkit-details-marker{display:none}\n.sseye-pre{background:var(--dsw-alias-markdown-code-block,#0d1117);border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:6px;padding:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow-y:auto;margin:4px 0}\n.sseye-chip{display:inline-block;padding:0 6px;border-radius:4px;background:var(--dsw-alias-button-ghost-active-fill,#21262d);color:var(--dsw-alias-label-secondary,#9fb4c7);margin-right:6px;font-size:11px;line-height:18px}\n.sseye-reason{color:var(--dsw-alias-label-tertiary,#8b949e);font-style:italic}\n.sseye-err{color:var(--dsw-alias-state-error-primary,#e5534b)}\n.sseye-policy{padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#262b31);background:var(--dsw-alias-bg-secondary,#171a1f);flex:none}\n.sseye-policy label{display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;white-space:nowrap}\n.sseye-textarea{width:100%;box-sizing:border-box;background:var(--dsw-alias-markdown-code-block,#0d1117);color:var(--dsw-alias-label-primary,#d7dbe0);border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:6px;font:inherit;font-size:11px;padding:6px;margin-top:6px}\n.sseye-empty{padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary,#8b949e)}\n.sseye-msg{margin-bottom:6px}\n.sseye-msg-new{border-left:2px solid var(--dsw-alias-state-business-primary,#4f8cff);padding-left:8px}\n.sseye-shared{margin-bottom:6px}\n.sseye-shared summary{color:var(--dsw-alias-label-tertiary,#8b949e);cursor:pointer;font-style:italic}\n')
 
     function fmtTime(ts) {
       try { return new Date(ts).toLocaleTimeString() } catch (e) { return '' }
@@ -34,11 +34,10 @@ return {
     function usageText(u) {
       if (!u || typeof u !== 'object') return ''
       const parts = []
-      for (const k of Object.keys(u)) {
-        const v = u[k]
-        if (typeof v === 'number') parts.push(k + ':' + v)
+      for (const k of ['inputTokens', 'outputTokens', 'cacheReadTokens']) {
+        if (typeof u[k] === 'number') parts.push(k.replace('Tokens', '') + ':' + u[k])
       }
-      return parts.slice(0, 3).join(' ')
+      return parts.join(' ')
     }
     function cap(s, n) {
       if (typeof s !== 'string') return ''
@@ -70,25 +69,88 @@ return {
     }
 
     function dot(status) {
-      const color = status === 'finished' ? '#34c98e' : status === 'error' ? '#e5534b' : '#f0b429'
+      const color = status === 'finished' ? 'var(--dsw-alias-state-success-primary,#34c98e)' : status === 'error' ? 'var(--dsw-alias-state-error-primary,#e5534b)' : 'var(--dsw-alias-state-warn-label,#f0b429)'
       return h('span', { className: 'sseye-dot', style: { background: color } })
     }
 
-    function Row(props) {
+    function TriggerIcon(props) {
+      const size = props && props.size ? props.size : 20
+      return h('svg', { viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' },
+        h('circle', { cx: 12, cy: 12, r: 2.1, fill: 'currentColor', stroke: 'none' }),
+        h('circle', { cx: 12, cy: 12, r: 6 }),
+        h('circle', { cx: 12, cy: 12, r: 10 }),
+        h('path', { d: 'M12 12 L19.5 6.5' }))
+    }
+
+    function Chevron(props) {
+      return h('span', { className: 'sseye-chev' + (props.open ? ' open' : '') }, '›')
+    }
+
+    function groupItems(items) {
+      const groups = []
+      const byKey = new Map()
+      for (const it of items) {
+        let key, kind
+        if (it.turn !== undefined && it.turn !== null) { key = 'T:' + (it.sessionId || '?') + ':' + it.turn; kind = 'turn' }
+        else { key = 'O:' + (it.source || 'other') + ':' + (it.sessionId || '?'); kind = 'other' }
+        let g = byKey.get(key)
+        if (!g) { g = { key: key, kind: kind, turn: it.turn, sessionId: it.sessionId, source: it.source, rows: [], latest: 0 }; byKey.set(key, g); groups.push(g) }
+        g.rows.push(it)
+        if (it.startedAt > g.latest) g.latest = it.startedAt
+      }
+      groups.sort((a, b) => b.latest - a.latest)
+      for (const g of groups) g.rows.sort((a, b) => a.startedAt - b.startedAt)
+      return groups
+    }
+
+    function StepRow(props) {
       const it = props.it
       const cls = store.selectedId === it.id ? 'sseye-row sel' : 'sseye-row'
       const kids = [
         dot(it.status),
-        h('span', { key: 't', className: 'sseye-dim' }, fmtTime(it.startedAt)),
-        h('span', { key: 'm', className: 'sseye-model' }, String(it.provider || '') + '/' + String(it.model || '')),
+        h('span', { key: 's', className: 'sseye-stepchip' }, it.step !== undefined && it.step !== null ? 'S' + it.step : (it.source || '')),
       ]
-      if (it.turn !== undefined && it.turn !== null) kids.push(h('span', { key: 'ts', className: 'sseye-chip' }, 'T' + it.turn + '·S' + it.step))
-      if (it.source && it.source !== 'agent') kids.push(h('span', { key: 'src', className: 'sseye-chip' }, it.source))
-      kids.push(h('span', { key: 'p', className: 'sseye-prev' }, it.preview || ''))
+      kids.push(h('span', { key: 't', className: 'sseye-dim' }, fmtTime(it.startedAt)))
+      kids.push(h('span', { key: 'p', className: 'sseye-prev' }, it.replyPreview || it.preview || ''))
       if (it.ttftMs !== undefined) kids.push(h('span', { key: 'ttft', className: 'sseye-dim' }, 'TTFT ' + fmtDur(it.ttftMs)))
       kids.push(h('span', { key: 'd', className: 'sseye-dim' }, fmtDur(it.durationMs)))
       if (it.usage) kids.push(h('span', { key: 'u', className: 'sseye-dim' }, usageText(it.usage)))
       return h('div', { className: cls, onClick: props.onSelect }, kids)
+    }
+
+    function TurnGroup(props) {
+      const g = props.g
+      const isOpen = store.openGroups[g.key] !== false
+      let inTok = 0, outTok = 0, dur = 0, running = 0
+      for (const r of g.rows) {
+        if (r.usage) {
+          if (typeof r.usage.inputTokens === 'number') inTok += r.usage.inputTokens
+          if (typeof r.usage.outputTokens === 'number') outTok += r.usage.outputTokens
+        }
+        if (r.durationMs) dur += r.durationMs
+        if (r.status === 'running') running++
+      }
+      const title = g.kind === 'turn' ? 'Turn ' + g.turn : (g.source === 'compaction' ? 'Compaction' : g.source === 'title' ? '会话标题' : '其他调用')
+      const prev = g.rows.length && g.rows[0].preview ? g.rows[0].preview : ''
+      return h('div', { className: 'sseye-tgroup' },
+        h('div', {
+          className: 'sseye-tgh',
+          onClick: () => { store.openGroups[g.key] = !isOpen; store.emit() },
+        },
+          h(Chevron, { open: isOpen }),
+          h('span', { className: 'sseye-tgh-title' }, title),
+          h('span', { className: 'sseye-chip' }, g.rows.length + ' 次调用' + (running ? ' · ' + running + ' 进行中' : '')),
+          h('span', { className: 'sseye-tgh-prev' }, prev),
+          h('span', { className: 'sseye-tgh-agg' }, 'in:' + inTok + ' out:' + outTok + ' · ' + fmtDur(dur))),
+        isOpen ? h('div', { className: 'sseye-steps' }, g.rows.map((it) => h(StepRow, {
+          key: it.id, it: it,
+          onSelect: () => {
+            store.selectedId = it.id
+            store.detail = null
+            store.emit()
+            host.call('get', { id: it.id }).then((d) => { if (d) store.detail = d; store.emit() }).catch(() => {})
+          },
+        }))) : null)
     }
 
     function MessageView(props) {
@@ -106,7 +168,7 @@ return {
           return JSON.stringify(b)
         }).join('\n')
       } else if (c !== undefined) body = JSON.stringify(c)
-      return h('div', { className: 'sseye-msg' },
+      return h('div', { className: 'sseye-msg' + (props.isNew ? ' sseye-msg-new' : '') },
         h('span', { className: 'sseye-chip' }, role),
         h('pre', { className: 'sseye-pre' }, cap(body, 20000)))
     }
@@ -129,7 +191,7 @@ return {
       const meta = []
       meta.push(h('span', { key: 'st', className: 'sseye-chip' }, d.status || ''))
       if (d.source) meta.push(h('span', { key: 'so', className: 'sseye-chip' }, d.source))
-      if (d.sessionId) meta.push(h('span', { key: 'se', className: 'sseye-chip' }, 'session ' + String(d.sessionId).slice(0, 8)))
+      if (d.protocol) meta.push(h('span', { key: 'pr', className: 'sseye-chip' }, d.protocol))
       if (d.turn !== undefined && d.turn !== null) meta.push(h('span', { key: 'ts', className: 'sseye-chip' }, 'T' + d.turn + ' · S' + d.step))
       if (d.ttftMs !== undefined) meta.push(h('span', { key: 'tt', className: 'sseye-chip' }, 'TTFT ' + fmtDur(d.ttftMs)))
       if (d.durationMs !== undefined) meta.push(h('span', { key: 'du', className: 'sseye-chip' }, '总时长 ' + fmtDur(d.durationMs)))
@@ -147,29 +209,38 @@ return {
 
       if (typeof req.system === 'string' && req.system) {
         kids.push(h('details', { key: 'sys', className: 'sseye-sec' },
-          h('summary', { className: 'sseye-sec-title' }, h('span', { className: 'sseye-expand' }, 'chevron_right'), 'System Prompt（' + req.system.length + ' 字符）'),
+          h('summary', { className: 'sseye-sec-title' }, h(Chevron, { open: false }), 'System Prompt（' + req.system.length + ' 字符）'),
           h('pre', { className: 'sseye-pre' }, cap(req.system, 30000))))
       } else if (req.systemOmitted) {
         kids.push(h('div', { key: 'sys', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'System Prompt（按策略未捕获）')))
       }
 
       if (Array.isArray(req.messages)) {
-        kids.push(h('div', { key: 'msgs', className: 'sseye-sec' },
-          h('div', { className: 'sseye-sec-title' }, 'Messages（' + req.messages.length + ' 条）'),
-          req.messages.map((m, i) => h(MessageView, { key: i, m: m }))))
+        const shared = typeof d.sharedPrefix === 'number' ? d.sharedPrefix : 0
+        const newCount = req.messages.length - shared
+        const msgKids = [h('div', { key: 'h', className: 'sseye-sec-title' }, 'Messages（共 ' + req.messages.length + ' 条' + (shared > 0 ? ' · 与前序共享 ' + shared + ' 条' : '') + (shared > 0 ? ' · 新增 ' + newCount + ' 条' : '') + '）')]
+        if (shared > 0) {
+          msgKids.push(h('details', { key: 'shared', className: 'sseye-shared' },
+            h('summary', null, '与前一次调用共享的前 ' + shared + ' 条消息（点击展开）'),
+            req.messages.slice(0, shared).map((m, i) => h(MessageView, { key: i, m: m }))))
+        }
+        req.messages.slice(shared).forEach((m, i) => {
+          msgKids.push(h(MessageView, { key: 'n' + i, m: m, isNew: shared > 0 }))
+        })
+        kids.push(h('div', { key: 'msgs', className: 'sseye-sec' }, msgKids))
       } else if (req.messagesOmitted) {
         kids.push(h('div', { key: 'msgs', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'Messages（' + req.messagesOmitted + ' 条，按策略未捕获）')))
       }
 
       if (Array.isArray(req.tools)) {
         kids.push(h('details', { key: 'tls', className: 'sseye-sec' },
-          h('summary', { className: 'sseye-sec-title' }, h('span', { className: 'sseye-expand' }, 'chevron_right'), 'Tools（' + req.tools.length + ' 个）'),
+          h('summary', { className: 'sseye-sec-title' }, h(Chevron, { open: false }), 'Tools（' + req.tools.length + ' 个）'),
           h('pre', { className: 'sseye-pre' }, cap(JSON.stringify(req.tools.map((t) => t && t.name), null, 2), 4000))))
       }
 
       if (d.wire) {
         kids.push(h('details', { key: 'wire', className: 'sseye-sec' },
-          h('summary', { className: 'sseye-sec-title' }, h('span', { className: 'sseye-expand' }, 'chevron_right'), 'Wire JSON（重建，近似）'),
+          h('summary', { className: 'sseye-sec-title' }, h(Chevron, { open: false }), 'Wire JSON（重建，近似）'),
           h('pre', { className: 'sseye-pre' }, cap(JSON.stringify(d.wire, null, 2), 40000))))
       }
 
@@ -237,11 +308,18 @@ return {
         return () => { dead = true; stop() }
       }, [store.open])
       if (!store.open) return null
-      const items = store.items
+      const all = store.items
+      const items = (store.onlyThisSession && store.sessionId) ? all.filter((it) => it.sessionId === store.sessionId) : all
+      const groups = groupItems(items)
       return h('div', { className: 'sseye-panel' },
         h('div', { className: 'sseye-head' },
           h('span', { className: 'sseye-title' }, 'SSEye'),
-          h('span', { className: 'sseye-count' }, items.length + ' 次调用'),
+          h('span', { className: 'sseye-count' }, groups.length + ' 轮 · ' + items.length + ' 次调用'),
+          h('button', {
+            className: 'sseye-btn',
+            'data-active': store.onlyThisSession ? '' : undefined,
+            onClick: () => { store.onlyThisSession = !store.onlyThisSession; store.emit() },
+          }, store.onlyThisSession ? '本会话' : '全部'),
           h('span', { className: 'sseye-spacer' }),
           h('button', {
             className: 'sseye-btn',
@@ -266,26 +344,23 @@ return {
         store.showPolicy ? h(PolicyPanel) : null,
         h('div', { className: 'sseye-body' },
           h('div', { className: 'sseye-listcol' },
-            items.length === 0
+            groups.length === 0
               ? h('div', { className: 'sseye-empty' }, '暂无捕获。发起一次对话或调用后此处出现记录。')
-              : items.map((it) => h(Row, {
-                  key: it.id, it: it,
-                  onSelect: () => {
-                    store.selectedId = it.id
-                    store.detail = null
-                    store.emit()
-                    host.call('get', { id: it.id }).then((d) => { if (d) store.detail = d; store.emit() }).catch(() => {})
-                  },
-                }))),
+              : groups.map((g) => h(TurnGroup, { key: g.key, g: g }))),
           store.selectedId ? h(Detail) : null))
     }
 
-    slots.inject('sidebar.footer.action', () => slots.register(
-      { name: 'sidebar.footer.action', id: 'sseye-trigger', label: 'SSEye' },
-      () => h('button', {
-        className: 'sseye-fab',
-        onClick: () => { store.open = !store.open; store.emit() },
-      }, 'SSEye'),
+    slots.inject('conversation.session.header.utilities', () => slots.register(
+      { name: 'conversation.session.header.utilities', id: 'sseye-trigger', label: 'SSEye' },
+      (props) => {
+        if (props && props.sessionId) store.sessionId = String(props.sessionId)
+        return h('button', {
+          className: 'sseye-hbtn',
+          'data-active': store.open ? '' : undefined,
+          title: 'SSEye · LLM 调试台',
+          onClick: () => { store.open = !store.open; store.emit() },
+        }, h(TriggerIcon, { size: 15 }), 'SSEye')
+      },
     ))
 
     slots.inject('shell.overlay', () => slots.register(

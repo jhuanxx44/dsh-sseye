@@ -15,6 +15,7 @@
 - `agent/request` × `llm/stream` 经 AbortSignal 对象身份关联成功，记录标注 `T轮·S步`
 - 字段级策略实时生效（关掉 system 后新记录显示「按策略未捕获」）
 - 观察器零侵入：tee 的 chunk 原样转发，会话流式输出不受影响
+- v1.3：入口挂 `conversation.session.header.utilities`（Session log 旁）；列表按 Turn 分组（Turn N → S 步骤序列，组头聚合 token/耗时）；详情折叠「与前序共享的 N 条消息」只展开新增（带左侧高亮条）；本会话/全部过滤；协议 chip 为 provider 推断表（`LlmProviderInfo` 无协议字段，未知 provider 不显示，诚实留白）
 
 ## 踩坑记录（毕业成独立插件时要带走的经验）
 
