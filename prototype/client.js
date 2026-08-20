@@ -181,16 +181,28 @@ return {
 
     function pull() {
       host.call('list').then((items) => {
-        store.items = Array.isArray(items) ? items : []
-        store.emit()
+        const arr = Array.isArray(items) ? items : []
+        let sig = String(arr.length)
+        for (const it of arr) sig += '|' + it.id + ':' + it.status + ':' + it.chunks
+        if (sig !== lastSig) {
+          lastSig = sig
+          store.items = arr
+          store.emit()
+        }
       }).catch(() => {})
       if (store.selectedId) {
-        host.call('get', { id: store.selectedId }).then((d) => {
-          if (d) store.detail = d
-          store.emit()
-        }).catch(() => {})
+        const cur = store.detail
+        if (!cur || cur.id !== store.selectedId || cur.status === 'running') {
+          host.call('get', { id: store.selectedId }).then((d) => {
+            if (d && d.id === store.selectedId) {
+              store.detail = d
+              store.emit()
+            }
+          }).catch(() => {})
+        }
       }
     }
+    let lastSig = ''
 
     function setPolicy(patch) {
       host.call('set-policy', patch).then((p) => {
@@ -284,6 +296,13 @@ return {
         }))) : null)
     }
 
+    function Section(props) {
+      const [open, setOpen] = React.useState(!!props.defaultOpen)
+      return h('div', { className: 'sseye-sec' },
+        h('div', { className: 'sseye-sec-title', onClick: () => setOpen(!open) }, h(Chevron, { open: open }), props.title),
+        open ? props.children : null)
+    }
+
     function MessageView(props) {
       const m = props.m
       const role = m && typeof m.role === 'string' ? m.role : 'unknown'
@@ -316,7 +335,7 @@ return {
 
     function Detail() {
       const d = store.detail
-      if (!d) return h('div', { className: 'sseye-empty' }, '加载中…')
+      if (!d) return h('div', { className: 'sseye-detail' }, h('div', { className: 'sseye-empty' }, '加载中…'))
       const req = d.request || {}
       const kids = []
       const meta = []
@@ -339,8 +358,7 @@ return {
         req.maxTokens !== undefined ? h('span', { className: 'sseye-chip' }, 'max ' + String(req.maxTokens)) : null))
 
       if (typeof req.system === 'string' && req.system) {
-        kids.push(h('details', { key: 'sys', className: 'sseye-sec' },
-          h('summary', { className: 'sseye-sec-title' }, h(Chevron, { open: false }), 'System Prompt（' + req.system.length + ' 字符）'),
+        kids.push(h(Section, { key: 'sys', title: 'System Prompt（' + req.system.length + ' 字符）' },
           copyablePre(cap(req.system, 30000), 'sseye-pre')))
       } else if (req.systemOmitted) {
         kids.push(h('div', { key: 'sys', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'System Prompt（按策略未捕获）')))
@@ -351,8 +369,7 @@ return {
         const newCount = req.messages.length - shared
         const msgKids = [h('div', { key: 'h', className: 'sseye-sec-title' }, 'Messages（共 ' + req.messages.length + ' 条' + (shared > 0 ? ' · 与前序共享 ' + shared + ' 条' : '') + (shared > 0 ? ' · 新增 ' + newCount + ' 条' : '') + '）')]
         if (shared > 0) {
-          msgKids.push(h('details', { key: 'shared', className: 'sseye-shared' },
-            h('summary', null, '与前一次调用共享的前 ' + shared + ' 条消息（点击展开）'),
+          msgKids.push(h(Section, { key: 'shared', title: '与前一次调用共享的前 ' + shared + ' 条消息（点击展开）' },
             req.messages.slice(0, shared).map((m, i) => h(MessageView, { key: i, m: m }))))
         }
         req.messages.slice(shared).forEach((m, i) => {
@@ -365,14 +382,12 @@ return {
 
       if (Array.isArray(req.tools)) {
         const names = req.tools.map((t) => t && t.name)
-        kids.push(h('details', { key: 'tls', className: 'sseye-sec' },
-          h('summary', { className: 'sseye-sec-title' }, h(Chevron, { open: false }), 'Tools（' + req.tools.length + ' 个）'),
+        kids.push(h(Section, { key: 'tls', title: 'Tools（' + req.tools.length + ' 个）' },
           copyableJson(names)))
       }
 
       if (d.wire) {
-        kids.push(h('details', { key: 'wire', className: 'sseye-sec' },
-          h('summary', { className: 'sseye-sec-title' }, h(Chevron, { open: false }), 'Wire JSON（重建，近似）'),
+        kids.push(h(Section, { key: 'wire', title: 'Wire JSON（重建，近似）' },
           copyablePre(cap(safeStringify(d.wire), 40000), 'sseye-pre')))
       }
 
