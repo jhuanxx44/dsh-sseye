@@ -21,7 +21,7 @@ return {
       },
     }
 
-    styles.insert('\n.sseye-hbtn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2,rgba(127,137,150,.35));background:transparent;color:var(--dsw-alias-label-secondary,#9fb4c7);cursor:pointer;line-height:20px}\n.sseye-hbtn:hover{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-hbtn[data-active]{background:var(--dsw-alias-state-business-primary,#4f8cff);border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:#fff}\n.sseye-hbtn svg{width:15px;height:15px}\n.sseye-panel{position:fixed;top:0;right:0;bottom:0;width:660px;max-width:94vw;background:var(--dsw-alias-bg-base,#14161a);color:var(--dsw-alias-label-primary,#d7dbe0);border-left:1px solid var(--dsw-alias-border-l1,#262b31);z-index:1000;display:flex;flex-direction:column;font-size:12px;box-shadow:var(--dsw-shadow-lv2,-12px 0 32px rgba(0,0,0,.45))}\n.sseye-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#262b31);flex:none}\n.sseye-title{font-weight:600;font-size:13px}\n.sseye-count{color:var(--dsw-alias-label-tertiary,#8b949e)}\n.sseye-spacer{flex:1}\n.sseye-btn{font:inherit;font-size:12px;padding:2px 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2,rgba(127,137,150,.35));background:transparent;color:inherit;cursor:pointer}\n.sseye-btn:hover{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-btn[data-active]{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-body{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}\n.sseye-listcol{flex:1;overflow-y:auto;min-height:0;padding:4px 0}\n.sseye-tgroup{margin:2px 8px 6px;border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-secondary,rgba(255,255,255,.015))}\n.sseye-tgh{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;background:var(--dsw-alias-bg-secondary,#171a1f);user-select:none}\n.sseye-tgh:hover{background:var(--dsw-alias-interactive-bg-hover,#1a1e24)}\n.sseye-tgh-title{font-weight:600;color:var(--dsw-alias-label-primary,#e6edf3);white-space:nowrap}\n.sseye-tgh-prev{color:var(--dsw-alias-label-tertiary,#8b949e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-style:italic}\n.sseye-tgh-agg{color:var(--dsw-alias-label-tertiary,#8b949e);white-space:nowrap;font-variant-numeric:tabular-nums}\n.sseye-chev{font-family:var(--sseye-icon-font,inherit);font-size:16px;line-height:1;display:inline-block;transition:transform .15s;user-select:none;color:var(--dsw-alias-label-tertiary,#8b949e);flex:none}\n.sseye-chev.open{transform:rotate(90deg)}\n.sseye-steps{border-top:1px solid var(--dsw-alias-border-l2,#21262d)}\n.sseye-row{display:flex;align-items:center;gap:8px;padding:5px 10px 5px 22px;border-bottom:1px solid var(--dsw-alias-border-l2,#1d2126);cursor:pointer;position:relative}\n.sseye-row:last-child{border-bottom:none}\n.sseye-row::before{content:"";position:absolute;left:10px;top:0;bottom:0;width:1px;background:var(--dsw-alias-border-l2,#2a2e33)}\n.sseye-row:hover{background:var(--dsw-alias-interactive-bg-hover,#1a1e24)}\n.sseye-row.sel{background:var(--dsw-alias-interactive-bg-hover,#1c2430)}\n.sseye-dot{width:7px;height:7px;border-radius:50%;flex:none}\n.sseye-stepchip{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#9fb4c7);font-weight:600;white-space:nowrap;min-width:34px}\n.sseye-model{color:var(--dsw-alias-label-primary,#e6edf3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}\n.sseye-dim{color:var(--dsw-alias-label-tertiary,#8b949e);white-space:nowrap;font-variant-numeric:tabular-nums}\n.sseye-prev{color:var(--dsw-alias-label-tertiary,#8b949e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}\n.sseye-detail{flex:1.4;min-height:0;overflow-y:auto;padding:10px 14px;border-top:1px solid var(--dsw-alias-border-l2,#262b31)}\n.sseye-sec{margin-bottom:12px}\n.sseye-sec-title{font-weight:600;color:var(--dsw-alias-label-secondary,#9fb4c7);margin-bottom:4px;display:flex;align-items:center;gap:4px;cursor:pointer;list-style:none}\n.sseye-sec-title::-webkit-details-marker{display:none}\n.sseye-pre{background:var(--dsw-alias-markdown-code-block,#0d1117);border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:6px;padding:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow-y:auto;margin:4px 0}\n.sseye-chip{display:inline-block;padding:0 6px;border-radius:4px;background:var(--dsw-alias-button-ghost-active-fill,#21262d);color:var(--dsw-alias-label-secondary,#9fb4c7);margin-right:6px;font-size:11px;line-height:18px}\n.sseye-reason{color:var(--dsw-alias-label-tertiary,#8b949e);font-style:italic}\n.sseye-err{color:var(--dsw-alias-state-error-primary,#e5534b)}\n.sseye-policy{padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#262b31);background:var(--dsw-alias-bg-secondary,#171a1f);flex:none}\n.sseye-policy label{display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;white-space:nowrap}\n.sseye-textarea{width:100%;box-sizing:border-box;background:var(--dsw-alias-markdown-code-block,#0d1117);color:var(--dsw-alias-label-primary,#d7dbe0);border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:6px;font:inherit;font-size:11px;padding:6px;margin-top:6px}\n.sseye-empty{padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary,#8b949e)}\n.sseye-msg{margin-bottom:6px}\n.sseye-msg-new{border-left:2px solid var(--dsw-alias-state-business-primary,#4f8cff);padding-left:8px}\n.sseye-shared{margin-bottom:6px}\n.sseye-shared summary{color:var(--dsw-alias-label-tertiary,#8b949e);cursor:pointer;font-style:italic}\n')
+    styles.insert('\n.sseye-hbtn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2,rgba(127,137,150,.35));background:transparent;color:var(--dsw-alias-label-secondary,#9fb4c7);cursor:pointer;line-height:20px}\n.sseye-hbtn:hover{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-hbtn[data-active]{background:var(--dsw-alias-state-business-primary,#4f8cff);border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:#fff}\n.sseye-hbtn svg{width:15px;height:15px}\n.sseye-panel{position:fixed;top:0;right:0;bottom:0;width:660px;max-width:94vw;background:var(--dsw-alias-bg-base,#14161a);color:var(--dsw-alias-label-primary,#d7dbe0);border-left:1px solid var(--dsw-alias-border-l1,#262b31);z-index:1000;display:flex;flex-direction:column;font-size:12px;box-shadow:var(--dsw-shadow-lv2,-12px 0 32px rgba(0,0,0,.45))}\n.sseye-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#262b31);flex:none}\n.sseye-title{font-weight:600;font-size:13px}\n.sseye-count{color:var(--dsw-alias-label-tertiary,#8b949e)}\n.sseye-spacer{flex:1}\n.sseye-btn{font:inherit;font-size:12px;padding:2px 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2,rgba(127,137,150,.35));background:transparent;color:inherit;cursor:pointer}\n.sseye-btn:hover{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-btn[data-active]{border-color:var(--dsw-alias-state-business-primary,#4f8cff);color:var(--dsw-alias-state-business-primary,#4f8cff)}\n.sseye-body{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}\n.sseye-listcol{flex:1;overflow-y:auto;min-height:0;padding:4px 0}\n.sseye-tgroup{margin:2px 8px 6px;border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-secondary,rgba(255,255,255,.015))}\n.sseye-tgh{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;background:var(--dsw-alias-bg-secondary,#171a1f);user-select:none}\n.sseye-tgh:hover{background:var(--dsw-alias-interactive-bg-hover,#1a1e24)}\n.sseye-tgh-title{font-weight:600;color:var(--dsw-alias-label-primary,#e6edf3);white-space:nowrap}\n.sseye-tgh-prev{color:var(--dsw-alias-label-tertiary,#8b949e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-style:italic}\n.sseye-tgh-agg{color:var(--dsw-alias-label-tertiary,#8b949e);white-space:nowrap;font-variant-numeric:tabular-nums}\n.sseye-chev{font-size:14px;line-height:1;display:inline-block;transition:transform .15s;user-select:none;color:var(--dsw-alias-label-tertiary,#8b949e);flex:none;font-style:normal}\n.sseye-chev.open{transform:rotate(90deg)}\n.sseye-steps{border-top:1px solid var(--dsw-alias-border-l2,#21262d)}\n.sseye-row{display:flex;align-items:center;gap:8px;padding:5px 10px 5px 22px;border-bottom:1px solid var(--dsw-alias-border-l2,#1d2126);cursor:pointer;position:relative}\n.sseye-row:last-child{border-bottom:none}\n.sseye-row::before{content:"";position:absolute;left:10px;top:0;bottom:0;width:1px;background:var(--dsw-alias-border-l2,#2a2e33)}\n.sseye-row:hover{background:var(--dsw-alias-interactive-bg-hover,#1a1e24)}\n.sseye-row.sel{background:var(--dsw-alias-interactive-bg-hover,#1c2430)}\n.sseye-dot{width:7px;height:7px;border-radius:50%;flex:none}\n.sseye-stepchip{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#9fb4c7);font-weight:600;white-space:nowrap;min-width:34px}\n.sseye-model{color:var(--dsw-alias-label-primary,#e6edf3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}\n.sseye-dim{color:var(--dsw-alias-label-tertiary,#8b949e);white-space:nowrap;font-variant-numeric:tabular-nums}\n.sseye-prev{color:var(--dsw-alias-label-tertiary,#8b949e);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}\n.sseye-detail{flex:1.4;min-height:0;overflow-y:auto;padding:10px 14px;border-top:1px solid var(--dsw-alias-border-l2,#262b31)}\n.sseye-sec{margin-bottom:12px}\n.sseye-sec-title{font-weight:600;color:var(--dsw-alias-label-secondary,#9fb4c7);margin-bottom:4px;display:flex;align-items:center;gap:4px;cursor:pointer;list-style:none}\n.sseye-sec-title::-webkit-details-marker{display:none}\n.sseye-pre{background:var(--dsw-alias-markdown-code-block,#0d1117);border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:6px;padding:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow-y:auto;margin:4px 0;line-height:1.55}\n.sseye-chip{display:inline-block;padding:0 6px;border-radius:4px;background:var(--dsw-alias-button-ghost-active-fill,#21262d);color:var(--dsw-alias-label-secondary,#9fb4c7);margin-right:6px;font-size:11px;line-height:18px}\n.sseye-reason{color:var(--dsw-alias-label-tertiary,#8b949e);font-style:italic}\n.sseye-err{color:var(--dsw-alias-state-error-primary,#e5534b)}\n.sseye-policy{padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#262b31);background:var(--dsw-alias-bg-secondary,#171a1f);flex:none}\n.sseye-policy label{display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;white-space:nowrap}\n.sseye-textarea{width:100%;box-sizing:border-box;background:var(--dsw-alias-markdown-code-block,#0d1117);color:var(--dsw-alias-label-primary,#d7dbe0);border:1px solid var(--dsw-alias-border-l2,#21262d);border-radius:6px;font:inherit;font-size:11px;padding:6px;margin-top:6px}\n.sseye-empty{padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary,#8b949e)}\n.sseye-msg{margin-bottom:6px}\n.sseye-msg-new{border-left:2px solid var(--dsw-alias-state-business-primary,#4f8cff);padding-left:8px}\n.sseye-shared{margin-bottom:6px}\n.sseye-shared summary{color:var(--dsw-alias-label-tertiary,#8b949e);cursor:pointer;font-style:italic}\n.sseye-jkey{color:#4f9cff}\n.sseye-jstr{color:#3fb950}\n.sseye-jnum{color:#d29922}\n.sseye-jbool{color:#a371f7}\n.sseye-jp{color:var(--dsw-alias-label-tertiary,#8b949e)}\n')
 
     function fmtTime(ts) {
       try { return new Date(ts).toLocaleTimeString() } catch (e) { return '' }
@@ -43,9 +43,74 @@ return {
       if (typeof s !== 'string') return ''
       return s.length > n ? s.slice(0, n) + '\n…[截断，共 ' + s.length + ' 字符]' : s
     }
-    function prettyArgs(s) {
-      if (typeof s !== 'string' || !s) return ''
-      try { return JSON.stringify(JSON.parse(s), null, 2) } catch (e) { return s }
+    function tryParse(s) {
+      if (typeof s !== 'string') return { ok: false }
+      try { return { ok: true, value: JSON.parse(s) } } catch (e) { return { ok: false } }
+    }
+
+    function jp(s) { return h('span', { className: 'sseye-jp' }, s) }
+
+    function jsonNode(v, ind, key) {
+      const padIn = '  '.repeat(ind + 1)
+      const pad = '  '.repeat(ind)
+      if (v === null || v === undefined) return h('span', { key: key, className: 'sseye-jbool' }, 'null')
+      if (typeof v === 'boolean') return h('span', { key: key, className: 'sseye-jbool' }, String(v))
+      if (typeof v === 'number') return h('span', { key: key, className: 'sseye-jnum' }, String(v))
+      if (typeof v === 'string') {
+        const s = v.length > 4000 ? v.slice(0, 4000) + '…[+' + (v.length - 4000) + ' 字符]' : v
+        return h('span', { key: key, className: 'sseye-jstr' }, '"' + s + '"')
+      }
+      if (Array.isArray(v)) {
+        if (v.length === 0) return h('span', { key: key, className: 'sseye-jp' }, '[]')
+        const kids = [jp('[\n')]
+        v.forEach((item, i) => {
+          kids.push(h('span', { key: 'i' + i }, [padIn, jsonNode(item, ind + 1, 'v'), i < v.length - 1 ? ',\n' : '\n']))
+        })
+        kids.push(jp(pad + ']'))
+        return h('span', { key: key }, kids)
+      }
+      if (typeof v === 'object') {
+        const keys = Object.keys(v)
+        if (keys.length === 0) return h('span', { key: key, className: 'sseye-jp' }, '{}')
+        const kids = [jp('{\n')]
+        keys.forEach((k2, i) => {
+          kids.push(h('span', { key: 'k' + i }, [padIn, h('span', { className: 'sseye-jkey' }, '"' + k2 + '"'), jp(': '), jsonNode(v[k2], ind + 1, 'v'), i < keys.length - 1 ? ',\n' : '\n']))
+        })
+        kids.push(jp(pad + '}'))
+        return h('span', { key: key }, kids)
+      }
+      return h('span', { key: key, className: 'sseye-jp' }, String(v))
+    }
+
+    function JsonView(props) {
+      return h('pre', { className: 'sseye-pre' }, jsonNode(props.value, 0, 'root'))
+    }
+
+    function BlockContent(props) {
+      const b = props.b
+      if (!b || typeof b !== 'object') return h('pre', { className: 'sseye-pre' }, cap(String(b), 20000))
+      const t = b.type
+      if (t === 'text' && typeof b.text === 'string') return h('pre', { className: 'sseye-pre' }, cap(b.text, 20000))
+      if (t === 'reasoning') return h('pre', { className: 'sseye-pre sseye-reason' }, cap(typeof b.reasoning === 'string' ? b.reasoning : (typeof b.text === 'string' ? b.text : ''), 20000))
+      if (t === 'tool-call' || t === 'tool_call') {
+        const args = typeof b.arguments === 'string' ? tryParse(b.arguments) : { ok: b.arguments !== undefined, value: b.arguments }
+        return h('div', { className: 'sseye-msg' },
+          h('span', { className: 'sseye-chip' }, 'tool-call ' + (b.name || '')),
+          args.ok ? h(JsonView, { value: args.value }) : h('pre', { className: 'sseye-pre' }, cap(String(b.arguments || ''), 20000)))
+      }
+      if (t === 'tool-result' || t === 'tool_result' || t === 'toolResult') {
+        const kids = [h('div', { key: 'h' },
+          h('span', { className: 'sseye-chip' }, 'tool-result' + (b.toolCallId ? ' ' + String(b.toolCallId) : '')),
+          b.isError ? h('span', { className: 'sseye-chip sseye-err' }, 'error') : null)]
+        if (Array.isArray(b.content)) {
+          for (let i = 0; i < b.content.length; i++) kids.push(h(BlockContent, { key: 'c' + i, b: b.content[i] }))
+        } else if (b.content !== undefined) {
+          kids.push(h(JsonView, { key: 'c', value: b.content }))
+        }
+        return h('div', null, kids)
+      }
+      if (t === 'image') return h('div', { className: 'sseye-dim' }, '[image 已省略]')
+      return h(JsonView, { value: b })
     }
 
     function pull() {
@@ -156,21 +221,19 @@ return {
     function MessageView(props) {
       const m = props.m
       const role = m && typeof m.role === 'string' ? m.role : 'unknown'
-      let body = ''
+      let body = null
       const c = m ? m.content : undefined
-      if (typeof c === 'string') body = c
-      else if (Array.isArray(c)) {
-        body = c.map((b) => {
-          if (!b || typeof b !== 'object') return String(b)
-          if (typeof b.text === 'string') return b.text
-          if (b.type === 'reasoning') return '[reasoning]\n' + (typeof b.reasoning === 'string' ? b.reasoning : JSON.stringify(b))
-          if (b.type === 'tool-call' || b.type === 'tool_call') return '[tool-call ' + (b.name || '') + '] ' + (typeof b.arguments === 'string' ? b.arguments : JSON.stringify(b))
-          return JSON.stringify(b)
-        }).join('\n')
-      } else if (c !== undefined) body = JSON.stringify(c)
+      if (typeof c === 'string') body = h('pre', { className: 'sseye-pre' }, cap(c, 20000))
+      else if (Array.isArray(c)) body = c.map((b, i) => h(BlockContent, { key: i, b: b }))
+      else if (c !== undefined) body = h(JsonView, { value: c })
+      else if (m && typeof m === 'object') {
+        const rest = {}
+        let has = false
+        for (const k of Object.keys(m)) { if (k !== 'role') { rest[k] = m[k]; has = true } }
+        if (has) body = h(JsonView, { value: rest })
+      }
       return h('div', { className: 'sseye-msg' + (props.isNew ? ' sseye-msg-new' : '') },
-        h('span', { className: 'sseye-chip' }, role),
-        h('pre', { className: 'sseye-pre' }, cap(body, 20000)))
+        h('span', { className: 'sseye-chip' }, role), body)
     }
 
     function BlockView(props) {
@@ -178,8 +241,10 @@ return {
       const label = '#' + b.index + ' ' + b.kind + (b.toolName ? ' ' + b.toolName : '') + ' · ' + b.chars + ' chars'
       let body = null
       if (b.kind === 'reasoning' && b.reasoning) body = h('pre', { className: 'sseye-pre sseye-reason' }, cap(b.reasoning, 20000))
-      else if (b.kind === 'tool-call') body = h('pre', { className: 'sseye-pre' }, cap(prettyArgs(b.args), 20000))
-      else if (b.text) body = h('pre', { className: 'sseye-pre' }, cap(b.text, 20000))
+      else if (b.kind === 'tool-call') {
+        const args = tryParse(b.args)
+        body = args.ok ? h(JsonView, { value: args.value }) : h('pre', { className: 'sseye-pre' }, cap(b.args, 20000))
+      } else if (b.text) body = h('pre', { className: 'sseye-pre' }, cap(b.text, 20000))
       return h('div', { className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, label), body)
     }
 
@@ -199,7 +264,7 @@ return {
       kids.push(h('div', { key: 'meta', className: 'sseye-sec' }, meta))
 
       if (d.error) kids.push(h('div', { key: 'err', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title sseye-err' }, '错误'), h('pre', { className: 'sseye-pre sseye-err' }, String(d.error))))
-      if (d.usage) kids.push(h('div', { key: 'us', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'Usage'), h('pre', { className: 'sseye-pre' }, JSON.stringify(d.usage, null, 2))))
+      if (d.usage) kids.push(h('div', { key: 'us', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'Usage'), h(JsonView, { value: d.usage })))
 
       kids.push(h('div', { key: 'rq', className: 'sseye-sec' },
         h('div', { className: 'sseye-sec-title' }, '请求 · ' + String(req.provider || '') + '/' + String(req.model || '')),
@@ -235,7 +300,7 @@ return {
       if (Array.isArray(req.tools)) {
         kids.push(h('details', { key: 'tls', className: 'sseye-sec' },
           h('summary', { className: 'sseye-sec-title' }, h(Chevron, { open: false }), 'Tools（' + req.tools.length + ' 个）'),
-          h('pre', { className: 'sseye-pre' }, cap(JSON.stringify(req.tools.map((t) => t && t.name), null, 2), 4000))))
+          h(JsonView, { value: req.tools.map((t) => t && t.name) })))
       }
 
       if (d.wire) {
@@ -250,7 +315,7 @@ return {
           d.blocks.map((b) => h(BlockView, { key: b.index, b: b }))))
       }
       if (d.finishReason !== undefined) {
-        kids.push(h('div', { key: 'fin', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'Finish'), h('pre', { className: 'sseye-pre' }, JSON.stringify(d.finishReason))))
+        kids.push(h('div', { key: 'fin', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'Finish'), h(JsonView, { value: d.finishReason })))
       }
       return h('div', { className: 'sseye-detail' }, kids)
     }

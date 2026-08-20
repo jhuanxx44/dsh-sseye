@@ -22,3 +22,4 @@
 1. **`harness.handle` 返回值必须是 lossless JSON**：不允许 `undefined` 值（可选字段要条件性省略，不要显式赋 `undefined`）、不允许 Date/Map/class 实例。
 2. **新页面不自动激活 Client 半**：`reconcileApprovals` 只处理 pending 状态的 attempt；已 committed 的 run 对新连接的页面显示「Client 待激活」，需要在「Cordis 插件」面板点「运行」（`startUserRun`，用户手势即授权）。毕业版若希望刷新后自动恢复，需要研究这一层。
 3. **列表高频轮询 + 行重渲染会让 a11y ref 快速漂移**——自动化测试点击行时要先重新 snapshot。
+4. **`cordis_define` 的 Package 是全量替换，不是合并**：pkg-5 曾只传了 `code.client`，运行后 Host 半变成 `absent`——面板能开但零捕获、RPC 全挂。每次 define 必须同时带上 host 和 client 两半，哪怕其中一半没变。
