@@ -158,6 +158,44 @@ function copyableJson(value: unknown) {
 
 function jp(s: string) { return h('span', { className: 'sseye-jp' }, s) }
 
+/**
+ * Per-container child cap for rendered JSON trees. A large tool-call payload
+ * (a file write, a huge array) otherwise materializes thousands of spans in
+ * one synchronous render and freezes the whole page — the cap bounds that;
+ * the overflow stays one click away and the full value is always on the
+ * copy button.
+ */
+const JSON_CHILD_CAP = 80
+
+/** Collapsed remainder of a capped array/object; expands in place on click. */
+function MoreJson(props: { v: any; keys: string[] | null; ind: number }) {
+  const [open, setOpen] = React.useState(false)
+  const v = props.v
+  const keys = props.keys
+  const ind = props.ind
+  const total = keys ? keys.length : v.length
+  if (!open) {
+    return h('button', {
+      className: 'sseye-jmore',
+      onClick: () => setOpen(true),
+    }, '… 展开 ' + (total - JSON_CHILD_CAP) + ' 项（共 ' + total + '，完整内容可复制）')
+  }
+  const padIn = '  '.repeat(ind + 1)
+  const kids: React.ReactNode[] = []
+  if (keys) {
+    const rest = keys.slice(JSON_CHILD_CAP)
+    rest.forEach((k2, i) => {
+      kids.push(h('span', { key: 'k' + i }, [padIn, h('span', { className: 'sseye-jkey' }, '"' + k2 + '"'), jp(': '), jsonNode(v[k2], ind + 1, 'v'), i < rest.length - 1 ? ',\n' : '\n']))
+    })
+  } else {
+    const rest = v.slice(JSON_CHILD_CAP)
+    rest.forEach((item, i) => {
+      kids.push(h('span', { key: 'i' + i }, [padIn, jsonNode(item, ind + 1, 'v'), i < rest.length - 1 ? ',\n' : '\n']))
+    })
+  }
+  return h('span', null, kids)
+}
+
 function jsonNode(v: any, ind: number, key: string): React.ReactNode {
   const padIn = '  '.repeat(ind + 1)
   const pad = '  '.repeat(ind)
@@ -170,20 +208,26 @@ function jsonNode(v: any, ind: number, key: string): React.ReactNode {
   }
   if (Array.isArray(v)) {
     if (v.length === 0) return h('span', { key, className: 'sseye-jp' }, '[]')
+    const capped = v.length > JSON_CHILD_CAP
+    const shown = capped ? v.slice(0, JSON_CHILD_CAP) : v
     const kids: React.ReactNode[] = [jp('[\n')]
-    v.forEach((item, i) => {
-      kids.push(h('span', { key: 'i' + i }, [padIn, jsonNode(item, ind + 1, 'v'), i < v.length - 1 ? ',\n' : '\n']))
+    shown.forEach((item, i) => {
+      kids.push(h('span', { key: 'i' + i }, [padIn, jsonNode(item, ind + 1, 'v'), (i < shown.length - 1 || capped) ? ',\n' : '\n']))
     })
+    if (capped) kids.push(h(MoreJson, { key: 'more', v, keys: null, ind }))
     kids.push(jp(pad + ']'))
     return h('span', { key }, kids)
   }
   if (typeof v === 'object') {
     const keys = Object.keys(v)
     if (keys.length === 0) return h('span', { key, className: 'sseye-jp' }, '{}')
+    const capped = keys.length > JSON_CHILD_CAP
+    const shown = capped ? keys.slice(0, JSON_CHILD_CAP) : keys
     const kids: React.ReactNode[] = [jp('{\n')]
-    keys.forEach((k2, i) => {
-      kids.push(h('span', { key: 'k' + i }, [padIn, h('span', { className: 'sseye-jkey' }, '"' + k2 + '"'), jp(': '), jsonNode(v[k2], ind + 1, 'v'), i < keys.length - 1 ? ',\n' : '\n']))
+    shown.forEach((k2, i) => {
+      kids.push(h('span', { key: 'k' + i }, [padIn, h('span', { className: 'sseye-jkey' }, '"' + k2 + '"'), jp(': '), jsonNode(v[k2], ind + 1, 'v'), (i < shown.length - 1 || capped) ? ',\n' : '\n']))
     })
+    if (capped) kids.push(h(MoreJson, { key: 'more', v, keys, ind }))
     kids.push(jp(pad + '}'))
     return h('span', { key }, kids)
   }
@@ -257,28 +301,54 @@ function exportUrl(ids: string, name: string): string {
   return API_BASE + '/export?ids=' + encodeURIComponent(ids) + '&name=' + encodeURIComponent(name)
 }
 
-function pull(): void {
-  api('/list').then((items: any[]) => {
+/**
+ * Fields a live /get merges into an open detail. Everything request-side
+ * (request/wire/sharedPrefix) is immutable per record and stays untouched.
+ */
+const LIVE_KEYS = ['status', 'chunks', 'ttftMs', 'durationMs', 'usage', 'finishReason', 'error', 'blocks']
+
+/**
+ * One polling round: /list (signature-guarded) plus, when the open detail is
+ * a running record, a live /get that merges only the streaming fields into
+ * the existing detail object. The full multi-megabyte /get is fetched once
+ * per selection (see toggleStep) and once more when the record settles —
+ * never per tick.
+ */
+function pull(): Promise<void> {
+  const jobs: Promise<unknown>[] = [api('/list').then((items: any[]) => {
     const arr = Array.isArray(items) ? items : []
+    // The signature deliberately excludes per-chunk counters: a streaming
+    // record must not re-parse and re-render the whole list on every tick.
+    // Every included field changes only at bounded moments (status flips,
+    // first-chunk TTFT, finish duration, the first 80 chars of preview).
     let sig = String(arr.length)
-    for (const it of arr) sig += '|' + it.id + ':' + it.status + ':' + it.chunks
+    for (const it of arr) sig += '|' + it.id + ':' + it.status + ':' + (it.ttftMs || 0) + ':' + (it.durationMs || 0) + ':' + (it.preview || '') + ':' + (it.replyPreview || '')
     if (sig !== lastSig) {
       lastSig = sig
       store.items = arr
       store.emit()
     }
-  }).catch(logErr('list'))
-  if (store.selectedId) {
-    const cur = store.detail
-    if (!cur || cur.id !== store.selectedId || cur.status === 'running') {
-      api('/get?id=' + encodeURIComponent(store.selectedId)).then((d) => {
-        if (d && d.id === store.selectedId) {
-          store.detail = d
-          store.emit()
-        }
-      }).catch(logErr('get'))
-    }
+  }).catch(logErr('list'))]
+  const cur = store.detail
+  if (store.selectedId && cur && cur.id === store.selectedId && cur.status === 'running') {
+    jobs.push(api('/get?live=1&id=' + encodeURIComponent(store.selectedId)).then((live: any) => {
+      // The selection may have changed while the request was in flight.
+      if (!live || live.id !== cur.id || store.detail !== cur) return
+      for (const k of LIVE_KEYS) {
+        if (live[k] !== undefined) (cur as Record<string, unknown>)[k] = live[k]
+      }
+      store.emit()
+      if (cur.status !== 'running') {
+        // Settled between ticks: one final full fetch so the settled view
+        // (final usage, finish reason, exact duration) is not the stale
+        // mid-stream snapshot the last live tick captured.
+        api('/get?id=' + encodeURIComponent(cur.id)).then((d: any) => {
+          if (d && d.id === store.selectedId && store.detail === cur) { store.detail = d; store.emit() }
+        }).catch(logErr('get:final'))
+      }
+    }).catch(logErr('get:live')))
   }
+  return Promise.all(jobs).then(() => undefined)
 }
 let lastSig = ''
 
@@ -551,23 +621,24 @@ function InlineDetail() {
   return h('div', { className: 'sseye-detail', ref }, h(Detail))
 }
 
-function Detail() {
-  const d = store.detail
-  if (!d) return h('div', { className: 'sseye-empty' }, '加载中…')
+/**
+ * The request-derived half of the detail view: params, system prompt,
+ * messages, tools, wire. All of it is immutable per record and multi-megabyte
+ * in the worst case, so it is memoized on the detail object identity: live
+ * polling mutates the same object in place (see pull), and this subtree —
+ * with its 20k-char copy strings and the 40k wire stringify — re-renders only
+ * when a different record is selected or the settled full detail replaces it.
+ */
+const RequestDetail = React.memo(function RequestDetail(props: { d: any }) {
+  const d = props.d
   const req = d.request || {}
   const kids: React.ReactNode[] = []
-
-  kids.push(h(Hero, { key: 'hero', d }))
-
-  if (d.error) kids.push(h('div', { key: 'err', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title sseye-err' }, '错误'), copyablePre(String(d.error), 'sseye-pre sseye-err')))
 
   const params: React.ReactNode[] = []
   if (req.reasoningEffort !== undefined) params.push(h('span', { key: 'ef', className: 'sseye-chip' }, 'effort ' + String(req.reasoningEffort)))
   if (req.temperature !== undefined) params.push(h('span', { key: 'tp', className: 'sseye-chip' }, 'temp ' + String(req.temperature)))
   if (req.maxTokens !== undefined) params.push(h('span', { key: 'mx', className: 'sseye-chip' }, 'max ' + String(req.maxTokens)))
   if (params.length) kids.push(h('div', { key: 'prm', className: 'sseye-sec' }, params))
-
-  if (d.usage) kids.push(h(Section, { key: 'us', title: 'Usage JSON' }, copyableJson(d.usage)))
 
   if (typeof req.system === 'string' && req.system) {
     kids.push(h(Section, { key: 'sys', title: 'System Prompt（' + req.system.length + ' 字符）' },
@@ -609,6 +680,25 @@ function Detail() {
     kids.push(h(Section, { key: 'wire', title: 'Wire JSON（重建，近似）' },
       copyablePre(cap(safeStringify(d.wire), 40000), 'sseye-pre')))
   }
+
+  return h('div', null, kids)
+})
+
+function Detail() {
+  const d = store.detail
+  if (!d) return h('div', { className: 'sseye-empty' }, '加载中…')
+  // Dynamic zone: everything that changes while the record streams (hero
+  // stats, usage, error, response blocks, finish) — cheap to re-render every
+  // live tick. The heavy request half lives in the memoized RequestDetail.
+  const kids: React.ReactNode[] = []
+
+  kids.push(h(Hero, { key: 'hero', d }))
+
+  if (d.error) kids.push(h('div', { key: 'err', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title sseye-err' }, '错误'), copyablePre(String(d.error), 'sseye-pre sseye-err')))
+
+  if (d.usage) kids.push(h(Section, { key: 'us', title: 'Usage JSON' }, copyableJson(d.usage)))
+
+  kids.push(h(RequestDetail, { key: 'req', d }))
 
   if (Array.isArray(d.blocks) && d.blocks.length > 0) {
     kids.push(h('div', { key: 'resp', className: 'sseye-sec' },
@@ -687,22 +777,62 @@ function PolicyPanel() {
 
 function Panel() {
   const [, force] = React.useState(0)
+  const rootRef = React.useRef<HTMLDivElement | null>(null)
   React.useEffect(() => {
     const f = () => force((n) => n + 1)
     store.listeners.add(f)
     return () => { store.listeners.delete(f) }
   }, [])
   React.useEffect(() => {
+    // The details column is never unmounted by the shell — closing it only
+    // collapses it to width 0 — so mount/unmount cannot gate polling. Measure
+    // the real rendered width instead: 0 (or a hidden tab) means fully paused,
+    // which is what keeps a closed panel at zero requests instead of a
+    // forever 1.5s heartbeat. A single self-scheduling loop also means a slow
+    // poll can never overlap the next one (setInterval did).
     let dead = false
-    const tick = () => { if (!dead) pull() }
-    tick()
-    const timer = setInterval(tick, 1500)
-    return () => { dead = true; clearInterval(timer) }
+    let width: number = typeof ResizeObserver === 'undefined' ? Infinity : 0
+    let wakeUp: (() => void) | null = null
+    const visible = () => width > 1 && !(typeof document !== 'undefined' && document.hidden)
+    const sleep = (ms: number) => new Promise<void>((resolve) => {
+      const t = setTimeout(() => { wakeUp = null; resolve() }, ms)
+      wakeUp = () => { clearTimeout(t); wakeUp = null; resolve() }
+    })
+    const wake = () => { if (wakeUp) wakeUp() }
+    const loop = async () => {
+      while (!dead) {
+        if (!visible()) { await sleep(500); continue }
+        try { await pull() } catch {}
+        const busy = store.items.some((it: any) => it.status === 'running')
+          || (store.detail != null && store.detail.status === 'running')
+        // Poll fast while anything streams, back off when idle.
+        await sleep(busy ? 1500 : 4000)
+      }
+    }
+    void loop()
+    let ro: ResizeObserver | undefined
+    const root = rootRef.current
+    if (typeof ResizeObserver !== 'undefined' && root) {
+      ro = new ResizeObserver((entries) => {
+        const prev = width
+        if (entries.length > 0) width = entries[entries.length - 1].contentRect.width
+        if (width > 1 && prev <= 1) wake() // column opened: refresh now
+      })
+      ro.observe(root)
+    }
+    const onVis = () => { if (!document.hidden) wake() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      dead = true
+      wake()
+      if (ro) ro.disconnect()
+      document.removeEventListener('visibilitychange', onVis)
+    }
   }, [])
   const all = store.items
   const items = (store.onlyThisSession && store.sessionId) ? all.filter((it) => it.sessionId === store.sessionId) : all
   const groups = groupItems(items)
-  return h('div', { className: 'sseye-panel' },
+  return h('div', { className: 'sseye-panel', ref: rootRef },
     h('div', { className: 'sseye-head' },
       h('span', { className: 'sseye-title' }, 'SSEye'),
       h('span', { className: 'sseye-count' }, groups.length + ' 轮 · ' + items.length + ' 次调用'),

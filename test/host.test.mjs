@@ -219,6 +219,77 @@ test('limits are runtime-tunable via /policy and clamped to bounds', async () =>
   assert.equal(clamped.limits.maxBlock, 1000, 'non-numeric ignored, previous value kept')
 })
 
+test('live /get returns only the streaming fields, not the request-side heavy half', async () => {
+  const { stream, handler } = await boot()
+  const long = 'y'.repeat(30000)
+  const tapped = stream(
+    { provider: 'deepseek-official', model: 'deepseek-chat', system: 'sys', messages: [{ role: 'user', content: 'hi' }], sessionId: 'sess-live' },
+    async function* () {
+      yield { type: 'text-delta', index: 0, text: 'partial' }
+      yield { type: 'text-delta', index: 0, text: long }
+    },
+  )
+  // Consume part of the stream and leave the record running, like a live poll would see it.
+  const it = tapped[Symbol.asyncIterator]()
+  await it.next()
+  await it.next()
+
+  const items = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  assert.equal(items[0].status, 'running')
+
+  const live = JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?live=1&id=' + items[0].id)).body)
+  assert.equal(live.id, items[0].id)
+  assert.equal(live.status, 'running')
+  assert.equal(live.chunks, 2)
+  assert.ok(Array.isArray(live.blocks) && live.blocks.length === 1, 'blocks ride the live payload')
+  // Live block text is capped for the transfer; chars keeps the true total.
+  assert.ok(live.blocks[0].text.length < 26000, 'live block text capped')
+  assert.match(live.blocks[0].text, /^partial/)
+  assert.match(live.blocks[0].text, /live 截断/)
+  assert.equal(live.blocks[0].chars, 'partial'.length + long.length)
+  // The multi-megabyte request-side half must not be in a live tick.
+  assert.ok(!('request' in live), 'no request in live payload')
+  assert.ok(!('wire' in live), 'no wire in live payload')
+  assert.ok(!('sharedPrefix' in live), 'no sharedPrefix in live payload')
+
+  // The full /get still carries everything, untruncated by the live cap.
+  const full = JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?id=' + items[0].id)).body)
+  assert.equal(full.request.model, 'deepseek-chat')
+  assert.ok(Array.isArray(full.wire.messages))
+  assert.equal(full.blocks[0].text, 'partial' + long, 'full get restores the whole block text')
+
+  // Unknown ids answer null in both modes.
+  assert.equal(JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?live=1&id=nope')).body), null)
+})
+
+test('redaction patterns are precompiled per policy change and apply at capture time', async () => {
+  const { stream, handler } = await boot()
+  const patched = JSON.parse((await callRoute(handler, 'POST', '/__sseye/policy', { redactions: ['sk-[a-z0-9]+'] })).body)
+  assert.deepEqual(patched.redactions, ['sk-[a-z0-9]+'])
+
+  const tapped = stream(
+    { provider: 'p', model: 'm', messages: [{ role: 'user', content: 'key sk-abc123 here' }] },
+    async function* () { yield { type: 'text-delta', index: 0, text: 'leak sk-xyz789 out' } },
+  )
+  for await (const _ of tapped) {}
+
+  const items = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  assert.match(items[0].preview, /key \*\*\* here/)
+  assert.ok(!items[0].preview.includes('sk-abc123'))
+  const d = JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?id=' + items[0].id)).body)
+  assert.match(d.blocks[0].text, /leak \*\*\* out/)
+
+  // Clearing the patterns through the same route disables redaction again.
+  await callRoute(handler, 'POST', '/__sseye/policy', { redactions: [] })
+  const tapped2 = stream(
+    { provider: 'p', model: 'm', messages: [{ role: 'user', content: 'again sk-keep123 now' }] },
+    async function* () { yield { type: 'finish', reason: 'stop' } },
+  )
+  for await (const _ of tapped2) {}
+  const items2 = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  assert.match(items2[0].preview, /again sk-keep123 now/, 'patterns cleared rebuild the compiled set')
+})
+
 test('wire reconstruction expands tool-result user messages into role:"tool"', async () => {
   const { stream, handler } = await boot()
   const tapped = stream(

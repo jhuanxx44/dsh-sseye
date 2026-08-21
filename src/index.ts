@@ -177,11 +177,23 @@ function capString(s: unknown): unknown {
   return s.slice(0, max) + '\n…[truncated, total ' + s.length + ' chars]'
 }
 
-function redact(s: unknown): unknown {
-  if (typeof s !== 'string' || policy.redactions.length === 0) return s
-  let out = s
+/**
+ * Redaction patterns are precompiled once per policy change. The old shape
+ * compiled a fresh RegExp for every stream delta of every running call —
+ * pure overhead on the hottest path in the plugin.
+ */
+let redactPatterns: RegExp[] = []
+function rebuildRedactions(): void {
+  redactPatterns = []
   for (const src of policy.redactions) {
-    try { out = out.replace(new RegExp(src, 'g'), '***') } catch {}
+    try { redactPatterns.push(new RegExp(src, 'g')) } catch {}
+  }
+}
+function redact(s: unknown): unknown {
+  if (typeof s !== 'string' || redactPatterns.length === 0) return s
+  let out = s
+  for (const re of redactPatterns) {
+    try { out = out.replace(re, '***') } catch {}
   }
   return out
 }
@@ -478,6 +490,35 @@ function detail(rec: Record_): Record<string, unknown> {
   return out
 }
 
+/**
+ * Live view of a running record: the summary fields plus response blocks.
+ * The heavy request-side half of `detail` (request/wire/sharedPrefix — the
+ * multi-megabyte part, and the O(context) sharedPrefix stringify) is immutable
+ * per record, so a client watching a streaming call fetches the full detail
+ * once and merges these small live ticks into it instead of re-transferring
+ * the whole context on every poll.
+ */
+const LIVE_TEXT_CAP = 24000
+
+/** Enough for the client's 20k display cap plus slack; a marker keeps the
+ *  truncation honest until the settled full /get restores the whole text. */
+function liveCap(s: string): string {
+  return s.length <= LIVE_TEXT_CAP ? s : s.slice(0, LIVE_TEXT_CAP) + '\n…[live 截断，共 ' + s.length + ' 字符]'
+}
+function liveBlock(b: CapturedBlock): CapturedBlock {
+  if (b.text.length <= LIVE_TEXT_CAP && b.reasoning.length <= LIVE_TEXT_CAP && b.args.length <= LIVE_TEXT_CAP) return b
+  const out: CapturedBlock = { ...b }
+  out.text = liveCap(out.text)
+  out.reasoning = liveCap(out.reasoning)
+  out.args = liveCap(out.args)
+  return out
+}
+function liveDetail(rec: Record_): Record<string, unknown> {
+  const out = summary(rec)
+  out.blocks = Array.from(rec.blocks.values()).sort((a, b) => a.index - b.index).map(liveBlock)
+  return out
+}
+
 /* ------------------------------------------------------------------ */
 /* Export (explicit user action only; nothing persists otherwise)      */
 /* ------------------------------------------------------------------ */
@@ -560,6 +601,7 @@ function applyPolicyPatch(args: any): Policy {
     }
     if (Array.isArray(args.redactions)) {
       policy.redactions = args.redactions.filter((s: unknown) => typeof s === 'string' && s.length > 0)
+      rebuildRedactions()
     }
     if (args.limits && typeof args.limits === 'object') {
       for (const k of Object.keys(LIMIT_BOUNDS) as (keyof Policy['limits'])[]) {
@@ -586,7 +628,8 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
     }
     if (req.method === 'GET' && sub === '/get') {
       const rec = byId.get(url.searchParams.get('id') || '')
-      sendJson(res, rec ? detail(rec) : null)
+      if (!rec) { sendJson(res, null); return }
+      sendJson(res, url.searchParams.get('live') === '1' ? liveDetail(rec) : detail(rec))
       return
     }
     if (req.method === 'POST' && sub === '/clear') {
