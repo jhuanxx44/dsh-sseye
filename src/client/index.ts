@@ -125,6 +125,12 @@ function CheckIcon() {
   return h('svg', { viewBox: '0 0 24 24', width: 12, height: 12, fill: 'none', stroke: 'currentColor', strokeWidth: 2.5, strokeLinecap: 'round', strokeLinejoin: 'round' },
     h('path', { d: 'M20 6L9 17l-5-5' }))
 }
+function DownloadIcon() {
+  return h('svg', { viewBox: '0 0 24 24', width: 12, height: 12, fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+    h('path', { d: 'M12 3v11' }),
+    h('path', { d: 'M7 10l5 5 5-5' }),
+    h('path', { d: 'M4 19h16' }))
+}
 
 function CopyWrap(props: { text: string; children?: React.ReactNode }) {
   const [copied, setCopied] = React.useState(false)
@@ -222,6 +228,35 @@ function logErr(where: string) {
   return (e: any) => { try { console.error('[sseye] ' + where + ' failed:', e && e.message ? e.message : String(e)) } catch {} }
 }
 
+/**
+ * Browser-native download through the host /export route: the route answers
+ * with `content-disposition: attachment`, so a plain anchor click saves the
+ * file — no Blob / URL.createObjectURL needed.
+ */
+function download(path: string): void {
+  try {
+    const a = document.createElement('a')
+    a.href = path
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  } catch (e) { logErr('download')(e) }
+}
+
+/** Download filename stem: turn/step coordinates when known, else source. */
+function exportNameOf(it: any): string {
+  const id = String(it && it.id ? it.id : 'call')
+  if (it && it.turn !== undefined && it.turn !== null) {
+    return 'T' + it.turn + (it.step !== undefined && it.step !== null ? '-S' + it.step : '') + '-' + id
+  }
+  return String(it && it.source ? it.source : 'call') + '-' + id
+}
+
+function exportUrl(ids: string, name: string): string {
+  return API_BASE + '/export?ids=' + encodeURIComponent(ids) + '&name=' + encodeURIComponent(name)
+}
+
 function pull(): void {
   api('/list').then((items: any[]) => {
     const arr = Array.isArray(items) ? items : []
@@ -311,6 +346,15 @@ function StepRow(props: { it: any; onSelect: () => void }) {
   if (it.ttftMs !== undefined) kids.push(h('span', { key: 'ttft', className: 'sseye-dim' }, 'TTFT ' + fmtDur(it.ttftMs)))
   kids.push(h('span', { key: 'd', className: 'sseye-dim' }, fmtDur(it.durationMs)))
   if (it.usage) kids.push(h('span', { key: 'u', className: 'sseye-dim' }, usageText(it.usage)))
+  kids.push(h('button', {
+    key: 'dl',
+    className: 'sseye-dl',
+    title: '下载该调用（JSON）',
+    onClick: (e: Event) => {
+      e.stopPropagation()
+      download(exportUrl(it.id, exportNameOf(it)))
+    },
+  }, h(DownloadIcon)))
   return h('div', { className: cls, onClick: props.onSelect }, kids)
 }
 
@@ -337,7 +381,17 @@ function TurnGroup(props: { g: Group }) {
       h('span', { className: 'sseye-tgh-title' }, title),
       h('span', { className: 'sseye-chip' }, g.rows.length + ' 次调用' + (running ? ' · ' + running + ' 进行中' : '')),
       h('span', { className: 'sseye-tgh-prev' }, prev),
-      h('span', { className: 'sseye-tgh-agg' }, 'in:' + inTok + ' out:' + outTok + ' · ' + fmtDur(dur))),
+      h('span', { className: 'sseye-tgh-agg' }, 'in:' + inTok + ' out:' + outTok + ' · ' + fmtDur(dur)),
+      h('button', {
+        className: 'sseye-dl',
+        title: '下载本组全部调用（JSON）',
+        onClick: (e: Event) => {
+          e.stopPropagation()
+          const ids = g.rows.map((r) => r.id).join(',')
+          const gname = g.kind === 'turn' ? 'turn-' + g.turn : String(g.source || 'group')
+          download(exportUrl(ids, gname))
+        },
+      }, h(DownloadIcon))),
     isOpen ? h('div', { className: 'sseye-steps' }, g.rows.map((it) => h(StepRow, {
       key: it.id, it,
       onSelect: () => {
@@ -439,6 +493,11 @@ function Hero(props: { d: any }) {
       d.source ? h('span', { className: 'sseye-chip' }, d.source) : null,
       d.turn !== undefined && d.turn !== null ? h('span', { className: 'sseye-chip' }, 'T' + d.turn + ' · S' + d.step) : null,
       h('span', { className: 'sseye-spacer' }),
+      h('button', {
+        className: 'sseye-btn',
+        title: '下载该调用（JSON）',
+        onClick: () => download(exportUrl(d.id, exportNameOf(d))),
+      }, '下载'),
       h('span', { className: 'sseye-dim' }, fmtTime(d.startedAt))),
     d.baseURL !== undefined ? h('div', { className: 'sseye-hero-ep' }, String(d.baseURL)) : null,
     h('div', { className: 'sseye-stats' }, stats),

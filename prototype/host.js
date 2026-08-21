@@ -296,6 +296,76 @@ function detail(rec) {
   return out
 }
 
+/* ---- export (explicit user action only; no Blob needed, browser-native download) ---- */
+
+const EXPORT_VERSION = '1.9.0'
+
+function exportPayload(ids) {
+  const recs = []
+  for (const id of ids) {
+    const r = byId.get(id)
+    if (r) recs.push(detail(r))
+  }
+  const base = { tool: 'dsh-sseye', version: EXPORT_VERSION, exportedAt: Date.now() }
+  if (recs.length === 1) { base.kind = 'record'; base.record = recs[0] }
+  else { base.kind = 'bundle'; base.count = recs.length; base.records = recs }
+  return base
+}
+
+// Dynamic-plugin host builtins do not include URL — parse the query string by hand.
+function queryOf(reqUrl) {
+  const out = {}
+  const q = String(reqUrl || '').split('?')[1]
+  if (q) {
+    for (const pair of q.split('&')) {
+      const eq = pair.indexOf('=')
+      if (eq > 0) {
+        try { out[decodeURIComponent(pair.slice(0, eq))] = decodeURIComponent(pair.slice(eq + 1)) } catch (e) {}
+      }
+    }
+  }
+  return out
+}
+
+function sendDownload(res, filename, value) {
+  try {
+    res.writeHead(200, {
+      'content-type': 'application/json; charset=utf-8',
+      'content-disposition': 'attachment; filename="' + filename + '"',
+      'cache-control': 'no-store',
+    })
+    res.end(JSON.stringify(value, null, 2))
+  } catch (e) { try { res.end() } catch (e2) {} }
+}
+
+function sendExportError(res, status, message) {
+  try {
+    res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+    res.end(JSON.stringify({ error: message }))
+  } catch (e) { try { res.end() } catch (e2) {} }
+}
+
+function handleExport(req, res) {
+  try {
+    const path = String(req.url || '').split('?')[0]
+    if (req.method !== 'GET' || path !== '/__sseye/export') {
+      sendExportError(res, 404, 'not found')
+      return
+    }
+    const q = queryOf(req.url)
+    const ids = String(q.ids || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50)
+    if (ids.length === 0) {
+      sendExportError(res, 400, 'ids required')
+      return
+    }
+    let name = String(q.name || (ids.length === 1 ? ids[0] : 'bundle-' + ids.length))
+    name = name.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80) || 'export'
+    sendDownload(res, 'sseye-' + name + '.json', exportPayload(ids))
+  } catch (e) {
+    sendExportError(res, 500, e && e.message ? e.message : String(e))
+  }
+}
+
 return {
   apply(ctx) {
     const svcs = { llm: ctx.get('llm'), settings: ctx.get('settings') }
@@ -413,6 +483,15 @@ return {
       }
       return cloneJson(policy)
     })
+
+    const webServer = ctx.get('webServer')
+    if (webServer !== undefined) {
+      try {
+        ctx.effect(() => webServer.register({ kind: 'prefix', path: '/__sseye', handler: handleExport }), 'sseye: export route')
+      } catch (e) {
+        console.warn('dsh-sseye: export route registration failed:', e && e.message ? e.message : String(e))
+      }
+    }
 
     console.log('dsh-sseye host: llm/stream capture active, capacity ' + CAPACITY)
   },

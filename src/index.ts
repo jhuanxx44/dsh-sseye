@@ -371,6 +371,25 @@ function detail(rec: Record_): Record<string, unknown> {
 }
 
 /* ------------------------------------------------------------------ */
+/* Export (explicit user action only; nothing persists otherwise)      */
+/* ------------------------------------------------------------------ */
+
+/** Export payload format version — bump when the shape changes. */
+const EXPORT_VERSION = '0.2.0'
+
+function exportPayload(ids: string[]): Record<string, unknown> {
+  const recs: Record<string, unknown>[] = []
+  for (const id of ids) {
+    const r = byId.get(id)
+    if (r) recs.push(detail(r))
+  }
+  const base: Record<string, unknown> = { tool: 'dsh-sseye', version: EXPORT_VERSION, exportedAt: Date.now() }
+  if (recs.length === 1) { base.kind = 'record'; base.record = recs[0] }
+  else { base.kind = 'bundle'; base.count = recs.length; base.records = recs }
+  return base
+}
+
+/* ------------------------------------------------------------------ */
 /* HTTP transport (Client half fetches these same-origin routes)       */
 /* ------------------------------------------------------------------ */
 
@@ -379,6 +398,23 @@ function sendJson(res: ServerResponse, value: unknown, status = 200): void {
     const body = JSON.stringify(value === undefined ? null : value)
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
     res.end(body)
+  } catch {
+    try { res.end() } catch {}
+  }
+}
+
+/**
+ * JSON as a file download: `content-disposition: attachment` makes a plain
+ * anchor click save the body, so the Client needs no Blob/createObjectURL.
+ */
+function sendDownload(res: ServerResponse, filename: string, value: unknown): void {
+  try {
+    res.writeHead(200, {
+      'content-type': 'application/json; charset=utf-8',
+      'content-disposition': 'attachment; filename="' + filename + '"',
+      'cache-control': 'no-store',
+    })
+    res.end(JSON.stringify(value, null, 2))
   } catch {
     try { res.end() } catch {}
   }
@@ -449,6 +485,17 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
       let patch: unknown = null
       try { patch = text ? JSON.parse(text) : null } catch {}
       sendJson(res, cloneJson(applyPolicyPatch(patch)))
+      return
+    }
+    if (req.method === 'GET' && sub === '/export') {
+      const ids = String(url.searchParams.get('ids') || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50)
+      if (ids.length === 0) {
+        sendJson(res, { error: 'ids required' }, 400)
+        return
+      }
+      let fname = String(url.searchParams.get('name') || (ids.length === 1 ? ids[0] : 'bundle-' + ids.length))
+      fname = fname.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80) || 'export'
+      sendDownload(res, 'sseye-' + fname + '.json', exportPayload(ids))
       return
     }
     sendJson(res, { error: 'not found' }, 404)

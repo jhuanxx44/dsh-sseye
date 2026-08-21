@@ -34,7 +34,7 @@ Standard DSH plugin form (host + web client halves):
 └── prototype/            # the validated dynamic-plugin prototype (historical reference)
 ```
 
-Host ↔ Client transport is same-origin HTTP on the `webServer` service (`/__sseye/list|get|clear|policy`) — composition plugins have no package-private RPC.
+Host ↔ Client transport is same-origin HTTP on the `webServer` service (`/__sseye/list|get|clear|policy|export`) — composition plugins have no package-private RPC.
 
 ## Development
 
@@ -48,7 +48,7 @@ Local install from the checkout: `dsh plugin --profile web add .` (links the dir
 
 ## Status
 
-Working capture + viewer (graduated from the validated `prototype/`, v1.6 parity). Diff / token anatomy / Replay & Mutate are not implemented yet. See [AGENTS.md](AGENTS.md) for the design contract.
+Working capture + viewer + explicit JSON export (graduated from the validated `prototype/`, v1.9 parity): hover any step row or turn group header for a download button, or use 下载 in the detail hero; the host `/__sseye/export` route answers with an attachment. Diff / token anatomy / Replay & Mutate are not implemented yet. See [AGENTS.md](AGENTS.md) for the design contract.
 
 ## Relationship to SSEye
 
