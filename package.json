@@ -1,6 +1,6 @@
 {
   "name": "dsh-sseye",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "The LLM debug console inside DeepSeek Harness — capture every model call, see everything, replay anything.",
   "keywords": [
     "dsh-plugin",

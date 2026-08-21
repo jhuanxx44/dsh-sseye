@@ -3,6 +3,11 @@
 # this package to the profile's dsh.profile.bundles layer list because the
 # manifest declares dsh.bundle.patch; at boot the composer applies this patch
 # and the row below activates with the rest of the composition.
+#
+# Row config (override in the profile's own cordis.patch.yml by id):
+#   - id: sseye
+#     config:
+#       locale: zh-CN   # UI language; default 'en', any 'zh*' tag → 中文
 
 - insert:
     - id: sseye

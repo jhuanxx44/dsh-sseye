@@ -12,6 +12,7 @@
  */
 import * as React from 'react'
 import { CSS } from './styles.js'
+import { t, setLocale, normalizeLocale } from './i18n.js'
 
 const h = React.createElement
 
@@ -83,7 +84,7 @@ function usageText(u: any): string {
 }
 function cap(s: unknown, n: number): string {
   if (typeof s !== 'string') return ''
-  return s.length > n ? s.slice(0, n) + '\n…[截断，共 ' + s.length + ' 字符]' : s
+  return s.length > n ? s.slice(0, n) + t('text.truncated', { n: s.length }) : s
 }
 function tryParse(s: unknown): { ok: boolean; value?: any } {
   if (typeof s !== 'string') return { ok: false }
@@ -138,7 +139,7 @@ function CopyWrap(props: { text: string; children?: React.ReactNode }) {
     props.children,
     h('button', {
       className: 'sseye-copy' + (copied ? ' ok' : ''),
-      title: '复制',
+      title: t('copy'),
       onClick: (e: Event) => {
         e.stopPropagation()
         copyText(props.text, () => {
@@ -178,7 +179,7 @@ function MoreJson(props: { v: any; keys: string[] | null; ind: number }) {
     return h('button', {
       className: 'sseye-jmore',
       onClick: () => setOpen(true),
-    }, '… 展开 ' + (total - JSON_CHILD_CAP) + ' 项（共 ' + total + '，完整内容可复制）')
+    }, t('json.expandMore', { more: total - JSON_CHILD_CAP, total }))
   }
   const padIn = '  '.repeat(ind + 1)
   const kids: React.ReactNode[] = []
@@ -203,7 +204,7 @@ function jsonNode(v: any, ind: number, key: string): React.ReactNode {
   if (typeof v === 'boolean') return h('span', { key, className: 'sseye-jbool' }, String(v))
   if (typeof v === 'number') return h('span', { key, className: 'sseye-jnum' }, String(v))
   if (typeof v === 'string') {
-    const s = v.length > 4000 ? v.slice(0, 4000) + '…[+' + (v.length - 4000) + ' 字符]' : v
+    const s = v.length > 4000 ? v.slice(0, 4000) + t('json.moreChars', { n: v.length - 4000 }) : v
     return h('span', { key, className: 'sseye-jstr' }, '"' + s + '"')
   }
   if (Array.isArray(v)) {
@@ -241,19 +242,19 @@ function JsonView(props: { value: unknown }) {
 function BlockContent(props: { b: any }) {
   const b = props.b
   if (!b || typeof b !== 'object') return copyablePre(cap(String(b), 20000), 'sseye-pre')
-  const t = b.type
-  if (t === 'text' && typeof b.text === 'string') return copyablePre(cap(b.text, 20000), 'sseye-pre')
-  if (t === 'reasoning') {
+  const type = b.type
+  if (type === 'text' && typeof b.text === 'string') return copyablePre(cap(b.text, 20000), 'sseye-pre')
+  if (type === 'reasoning') {
     const txt = typeof b.reasoning === 'string' ? b.reasoning : (typeof b.text === 'string' ? b.text : '')
     return copyablePre(cap(txt, 20000), 'sseye-pre sseye-reason')
   }
-  if (t === 'tool-call' || t === 'tool_call') {
+  if (type === 'tool-call' || type === 'tool_call') {
     const args = typeof b.arguments === 'string' ? tryParse(b.arguments) : { ok: b.arguments !== undefined, value: b.arguments }
     return h('div', { className: 'sseye-msg' },
       h('span', { className: 'sseye-chip' }, 'tool-call ' + (b.name || '')),
       args.ok ? copyableJson(args.value) : copyablePre(cap(String(b.arguments || ''), 20000), 'sseye-pre'))
   }
-  if (t === 'tool-result' || t === 'tool_result' || t === 'toolResult') {
+  if (type === 'tool-result' || type === 'tool_result' || type === 'toolResult') {
     const kids: React.ReactNode[] = [h('div', { key: 'h' },
       h('span', { className: 'sseye-chip' }, 'tool-result' + (b.toolCallId ? ' ' + String(b.toolCallId) : '')),
       b.isError ? h('span', { className: 'sseye-chip sseye-err' }, 'error') : null)]
@@ -264,7 +265,7 @@ function BlockContent(props: { b: any }) {
     }
     return h('div', null, kids)
   }
-  if (t === 'image') return h('div', { className: 'sseye-dim' }, '[image 已省略]')
+  if (type === 'image') return h('div', { className: 'sseye-dim' }, t('block.imageOmitted'))
   return copyableJson(b)
 }
 
@@ -436,7 +437,7 @@ function StepRow(props: { it: any; onSelect: () => void }) {
   kids.push(h('button', {
     key: 'dl',
     className: 'sseye-dl',
-    title: '下载该调用（JSON）',
+    title: t('row.downloadCall'),
     onClick: (e: Event) => {
       e.stopPropagation()
       download(exportUrl(it.id, exportNameOf(it)))
@@ -482,7 +483,9 @@ function TurnGroup(props: { g: Group }) {
     if (r.durationMs) dur += r.durationMs
     if (r.status === 'running') running++
   }
-  const title = g.kind === 'turn' ? 'Turn ' + g.turn : (g.source === 'compaction' ? 'Compaction' : g.source === 'title' ? '会话标题' : '其他调用')
+  const title = g.kind === 'turn'
+    ? t('group.turn', { n: String(g.turn) })
+    : (g.source === 'compaction' ? t('group.compaction') : g.source === 'title' ? t('group.sessionTitle') : t('group.other'))
   const prev = g.rows.length && g.rows[0].preview ? g.rows[0].preview : ''
   return h('div', { className: 'sseye-tgroup' },
     h('div', {
@@ -491,12 +494,12 @@ function TurnGroup(props: { g: Group }) {
     },
       h(Chevron, { open: isOpen }),
       h('span', { className: 'sseye-tgh-title' }, title),
-      h('span', { className: 'sseye-chip' }, g.rows.length + ' 次调用' + (running ? ' · ' + running + ' 进行中' : '')),
+      h('span', { className: 'sseye-chip' }, t('group.calls', { n: g.rows.length }) + (running ? t('group.running', { n: running }) : '')),
       h('span', { className: 'sseye-tgh-prev' }, prev),
       h('span', { className: 'sseye-tgh-agg' }, 'in:' + inTok + ' out:' + outTok + ' · ' + fmtDur(dur)),
       h('button', {
         className: 'sseye-dl',
-        title: '下载本组全部调用（JSON）',
+        title: t('group.downloadAll'),
         onClick: (e: Event) => {
           e.stopPropagation()
           const ids = g.rows.map((r) => r.id).join(',')
@@ -548,9 +551,9 @@ function MessageView(props: { m: any; isNew?: boolean }) {
     h('div', { className: 'sseye-msg-head' },
       h('span', {
         className: 'sseye-role sseye-role-' + (pureToolResult ? 'tool' : role),
-        title: pureToolResult ? '规范化层 role=user（工具结果块）；wire 层展开为 role:"tool"' : undefined,
+        title: pureToolResult ? t('msg.toolResultRole') : undefined,
       }, shownRole),
-      h('span', { className: 'sseye-dim' }, msgChars(m) + ' 字符')),
+      h('span', { className: 'sseye-dim' }, t('msg.chars', { n: msgChars(m) }))),
     body)
 }
 
@@ -587,7 +590,7 @@ function Hero(props: { d: any }) {
   const u = d.usage || {}
   const stats: React.ReactNode[] = []
   if (d.ttftMs !== undefined) stats.push(h(Stat, { key: 'ttft', label: 'TTFT', value: fmtDur(d.ttftMs) }))
-  if (d.durationMs !== undefined) stats.push(h(Stat, { key: 'dur', label: '总时长', value: fmtDur(d.durationMs) }))
+  if (d.durationMs !== undefined) stats.push(h(Stat, { key: 'dur', label: t('hero.duration'), value: fmtDur(d.durationMs) }))
   stats.push(h(Stat, { key: 'ch', label: 'chunks', value: String(d.chunks) }))
   if (typeof u.inputTokens === 'number') stats.push(h(Stat, { key: 'in', label: 'input', value: String(u.inputTokens) }))
   if (typeof u.outputTokens === 'number') stats.push(h(Stat, { key: 'out', label: 'output', value: String(u.outputTokens) }))
@@ -597,21 +600,21 @@ function Hero(props: { d: any }) {
     const ratio = u.cacheReadTokens / (u.inputTokens + u.cacheReadTokens)
     cacheBar = h('div', { className: 'sseye-cache', title: 'cacheReadTokens / (inputTokens + cacheReadTokens)' },
       h('div', { className: 'sseye-cache-track' }, h('div', { className: 'sseye-cache-fill', style: { width: (ratio * 100).toFixed(1) + '%' } })),
-      h('span', { className: 'sseye-cache-label' }, 'cache 命中 ' + (ratio * 100).toFixed(1) + '%'))
+      h('span', { className: 'sseye-cache-label' }, t('hero.cacheHit', { pct: (ratio * 100).toFixed(1) })))
   }
   return h('div', { className: 'sseye-hero' },
     h('div', { className: 'sseye-hero-top' },
       dot(d.status),
       h('span', { className: 'sseye-hero-model' }, String(req.provider || '') + '/' + String(req.model || '')),
-      d.protocol ? h('span', { className: 'sseye-chip sseye-chip-accent', title: d.api ? d.api + (d.protocolGuessed ? '（按 provider 猜测）' : '（来自 provider 配置）') : undefined }, (d.protocolGuessed ? '~' : '') + d.protocol) : null,
+      d.protocol ? h('span', { className: 'sseye-chip sseye-chip-accent', title: d.api ? d.api + (d.protocolGuessed ? t('hero.apiGuessed') : t('hero.apiConfigured')) : undefined }, (d.protocolGuessed ? '~' : '') + d.protocol) : null,
       d.source ? h('span', { className: 'sseye-chip' }, d.source) : null,
       d.turn !== undefined && d.turn !== null ? h('span', { className: 'sseye-chip' }, 'T' + d.turn + ' · S' + d.step) : null,
       h('span', { className: 'sseye-spacer' }),
       h('button', {
         className: 'sseye-btn',
-        title: '下载该调用（JSON）',
+        title: t('row.downloadCall'),
         onClick: () => download(exportUrl(d.id, exportNameOf(d))),
-      }, '下载'),
+      }, t('hero.download')),
       h('span', { className: 'sseye-dim' }, fmtTime(d.startedAt))),
     d.baseURL !== undefined ? h('div', { className: 'sseye-hero-ep' }, String(d.baseURL)) : null,
     h('div', { className: 'sseye-stats' }, stats),
@@ -655,25 +658,29 @@ const RequestDetail = React.memo(function RequestDetail(props: { d: any }) {
   if (params.length) kids.push(h('div', { key: 'prm', className: 'sseye-sec' }, params))
 
   if (typeof req.system === 'string' && req.system) {
-    kids.push(h(Section, { key: 'sys', title: 'System Prompt（' + req.system.length + ' 字符）' },
+    kids.push(h(Section, { key: 'sys', title: t('req.systemPrompt', { n: req.system.length }) },
       copyablePre(cap(req.system, 30000), 'sseye-pre')))
   } else if (req.systemOmitted) {
-    kids.push(h('div', { key: 'sys', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'System Prompt（按策略未捕获）')))
+    kids.push(h('div', { key: 'sys', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, t('req.systemOmitted'))))
   }
 
   if (Array.isArray(req.messages)) {
     const shared = typeof d.sharedPrefix === 'number' ? d.sharedPrefix : 0
     const newCount = req.messages.length - shared
     const DIRECT_TAIL = 30
-    const msgKids: React.ReactNode[] = [h('div', { key: 'h', className: 'sseye-sec-title' }, 'Messages（共 ' + req.messages.length + ' 条' + (shared > 0 ? ' · 与前序共享 ' + shared + ' 条' : '') + (shared > 0 ? ' · 新增 ' + newCount + ' 条' : '') + '）')]
+    const msgKids: React.ReactNode[] = [h('div', { key: 'h', className: 'sseye-sec-title' },
+      t('req.messagesHeader', {
+        n: req.messages.length,
+        rest: shared > 0 ? t('req.messagesShared', { n: shared }) + t('req.messagesNew', { n: newCount }) : '',
+      }))]
     if (shared > 0) {
-      msgKids.push(h(Section, { key: 'shared', title: '与前一次调用共享的前 ' + shared + ' 条消息（点击展开）' },
+      msgKids.push(h(Section, { key: 'shared', title: t('req.sharedMessages', { n: shared }) },
         req.messages.slice(0, shared).map((m: any, i: number) => h(MessageView, { key: i, m }))))
     }
     const tail = req.messages.slice(shared)
     const folded = tail.length > DIRECT_TAIL ? tail.length - DIRECT_TAIL : 0
     if (folded > 0) {
-      msgKids.push(h(Section, { key: 'older', title: '更早的 ' + folded + ' 条消息（点击展开）' },
+      msgKids.push(h(Section, { key: 'older', title: t('req.olderMessages', { n: folded }) },
         tail.slice(0, folded).map((m: any, i: number) => h(MessageView, { key: 'o' + i, m }))))
     }
     tail.slice(folded).forEach((m: any, i: number) => {
@@ -681,17 +688,17 @@ const RequestDetail = React.memo(function RequestDetail(props: { d: any }) {
     })
     kids.push(h('div', { key: 'msgs', className: 'sseye-sec' }, msgKids))
   } else if (req.messagesOmitted) {
-    kids.push(h('div', { key: 'msgs', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'Messages（' + req.messagesOmitted + ' 条，按策略未捕获）')))
+    kids.push(h('div', { key: 'msgs', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, t('req.messagesOmitted', { n: req.messagesOmitted }))))
   }
 
   if (Array.isArray(req.tools)) {
     const names = req.tools.map((t: any) => t && t.name)
-    kids.push(h(Section, { key: 'tls', title: 'Tools（' + req.tools.length + ' 个）' },
+    kids.push(h(Section, { key: 'tls', title: t('req.tools', { n: req.tools.length }) },
       copyableJson(names)))
   }
 
   if (d.wire && (!d.api || d.api === 'openai-completions')) {
-    kids.push(h(Section, { key: 'wire', title: 'Wire JSON（重建，近似）' },
+    kids.push(h(Section, { key: 'wire', title: t('req.wire') },
       copyablePre(cap(safeStringify(d.wire), 40000), 'sseye-pre')))
   }
 
@@ -700,7 +707,7 @@ const RequestDetail = React.memo(function RequestDetail(props: { d: any }) {
 
 function Detail() {
   const d = store.detail
-  if (!d) return h('div', { className: 'sseye-empty' }, '加载中…')
+  if (!d) return h('div', { className: 'sseye-empty' }, t('detail.loading'))
   // Dynamic zone: everything that changes while the record streams (hero
   // stats, usage, error, response blocks, finish) — cheap to re-render every
   // live tick. The heavy request half lives in the memoized RequestDetail.
@@ -708,7 +715,7 @@ function Detail() {
 
   kids.push(h(Hero, { key: 'hero', d }))
 
-  if (d.error) kids.push(h('div', { key: 'err', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title sseye-err' }, '错误'), copyablePre(String(d.error), 'sseye-pre sseye-err')))
+  if (d.error) kids.push(h('div', { key: 'err', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title sseye-err' }, t('detail.error')), copyablePre(String(d.error), 'sseye-pre sseye-err')))
 
   if (d.usage) kids.push(h(Section, { key: 'us', title: 'Usage JSON' }, copyableJson(d.usage)))
 
@@ -716,7 +723,7 @@ function Detail() {
 
   if (Array.isArray(d.blocks) && d.blocks.length > 0) {
     kids.push(h('div', { key: 'resp', className: 'sseye-sec' },
-      h('div', { className: 'sseye-sec-title' }, '响应 · ' + d.blocks.length + ' 个块'),
+      h('div', { className: 'sseye-sec-title' }, t('detail.response', { n: d.blocks.length })),
       d.blocks.map((b: any) => h(BlockView, { key: b.index, b }))))
   }
   if (d.finishReason !== undefined) {
@@ -728,17 +735,17 @@ function Detail() {
 function PolicyPanel() {
   const p = store.policy
   if (!p) return null
-  const srcLabels: [string, string][] = [['agent', 'Agent 调用'], ['compaction', 'Compaction'], ['title', '会话标题'], ['other', '其他/重放']]
-  const fldLabels: [string, string][] = [['system', 'system'], ['messages', 'messages'], ['tools', 'tools'], ['reasoning', 'reasoning'], ['text', '正文'], ['toolArgs', '工具参数']]
+  const srcLabels: [string, string][] = [['agent', t('policy.src.agent')], ['compaction', t('policy.src.compaction')], ['title', t('policy.src.title')], ['other', t('policy.src.other')]]
+  const fldLabels: [string, string][] = [['system', 'system'], ['messages', 'messages'], ['tools', 'tools'], ['reasoning', 'reasoning'], ['text', t('policy.fld.text')], ['toolArgs', t('policy.fld.toolArgs')]]
   const lim = p.limits || {}
   // [key, label, min, max, step] — bounds mirror LIMIT_BOUNDS on the host.
   const limLabels: [string, string, number, number, number][] = [
-    ['capacity', '缓冲条数', 1, 5000, 10],
-    ['maxString', '请求字段截断', 1000, 20000000, 1000],
-    ['maxBlock', '响应块截断', 1000, 50000000, 10000],
+    ['capacity', t('policy.lim.capacity'), 1, 5000, 10],
+    ['maxString', t('policy.lim.maxString'), 1000, 20000000, 1000],
+    ['maxBlock', t('policy.lim.maxBlock'), 1000, 50000000, 10000],
   ]
   return h('div', { className: 'sseye-policy' },
-    h('div', null, '来源：', srcLabels.map((kv) =>
+    h('div', null, t('policy.sources'), srcLabels.map((kv) =>
       h('label', { key: kv[0] }, h('input', {
         type: 'checkbox', checked: !!(p.sources && p.sources[kv[0]]),
         onChange: (e: any) => {
@@ -748,7 +755,7 @@ function PolicyPanel() {
           setPolicy(patch)
         },
       }), kv[1]))),
-    h('div', { style: { marginTop: '6px' } }, '字段：', fldLabels.map((kv) =>
+    h('div', { style: { marginTop: '6px' } }, t('policy.fields'), fldLabels.map((kv) =>
       h('label', { key: kv[0] }, h('input', {
         type: 'checkbox', checked: !!(p.fields && p.fields[kv[0]]),
         onChange: (e: any) => {
@@ -758,8 +765,8 @@ function PolicyPanel() {
           setPolicy(patch)
         },
       }), kv[1]))),
-    h('div', { style: { marginTop: '6px' } }, '容量：', limLabels.map((it) =>
-      h('label', { key: it[0], title: '范围 ' + it[2] + ' – ' + it[3] + '，失焦生效' },
+    h('div', { style: { marginTop: '6px' } }, t('policy.capacity'), limLabels.map((it) =>
+      h('label', { key: it[0], title: t('policy.limRange', { min: it[2], max: it[3] }) },
         h('span', null, it[1]),
         h('input', {
           type: 'number',
@@ -777,10 +784,10 @@ function PolicyPanel() {
           },
         }))),
       h('div', { className: 'sseye-dim', style: { marginTop: '4px' } },
-        '截断只作用于之后的捕获内容；调小缓冲条数会立即裁掉最旧的记录')),
+        t('policy.limitsNote'))),
     h('textarea', {
       className: 'sseye-textarea', rows: 2,
-      placeholder: '脱敏正则，每行一条；命中替换为 ***（失焦生效）',
+      placeholder: t('policy.redactPlaceholder'),
       defaultValue: (p.redactions || []).join('\n'),
       onBlur: (e: any) => {
         const lines = String(e.target.value || '').split('\n').map((s: string) => s.trim()).filter(Boolean)
@@ -849,12 +856,12 @@ function Panel() {
   return h('div', { className: 'sseye-panel', ref: rootRef },
     h('div', { className: 'sseye-head' },
       h('span', { className: 'sseye-title' }, 'SSEye'),
-      h('span', { className: 'sseye-count' }, groups.length + ' 轮 · ' + items.length + ' 次调用'),
+      h('span', { className: 'sseye-count' }, t('panel.turns', { n: groups.length }) + ' · ' + t('group.calls', { n: items.length })),
       h('button', {
         className: 'sseye-btn',
         'data-active': store.onlyThisSession ? '' : undefined,
         onClick: () => { store.onlyThisSession = !store.onlyThisSession; store.emit() },
-      }, store.onlyThisSession ? '本会话' : '全部'),
+      }, store.onlyThisSession ? t('panel.thisSession') : t('panel.all')),
       h('span', { className: 'sseye-spacer' }),
       h('button', {
         className: 'sseye-btn',
@@ -865,25 +872,46 @@ function Panel() {
           }
           store.emit()
         },
-      }, store.showPolicy ? '收起策略' : '抓取策略'),
+      }, store.showPolicy ? t('panel.hidePolicy') : t('panel.showPolicy')),
       h('button', {
         className: 'sseye-btn',
         onClick: () => {
           api('/clear', {}).then(() => { store.items = []; store.selectedId = null; store.detail = null; store.emit() }).catch(logErr('clear'))
         },
-      }, '清空'),
+      }, t('panel.clear')),
       h('button', {
         className: 'sseye-btn',
         onClick: () => { store.open = false; store.emit(); if (layout) layout.closeDetails() },
-      }, '关闭')),
+      }, t('panel.close'))),
     store.showPolicy ? h(PolicyPanel) : null,
     // Single scroll flow: the list column is the only scrolling region; step
     // details expand inline under their row (see stepRows/InlineDetail).
     h('div', { className: 'sseye-body' },
       h('div', { className: 'sseye-listcol' },
         groups.length === 0
-          ? h('div', { className: 'sseye-empty' }, '暂无捕获。发起一次对话或调用后此处出现记录。')
+          ? h('div', { className: 'sseye-empty' }, t('panel.empty'))
           : groups.map((g) => h(TurnGroup, { key: g.key, g })))))
+}
+
+/** The header trigger: a store subscriber so a late locale switch re-renders
+ *  its title (the shell never re-invokes the slot render on its own). */
+function TriggerButton() {
+  const [, force] = React.useState(0)
+  React.useEffect(() => {
+    const f = () => force((n) => n + 1)
+    store.listeners.add(f)
+    return () => { store.listeners.delete(f) }
+  }, [])
+  return h('button', {
+    className: 'sseye-hbtn',
+    'data-active': store.open ? '' : undefined,
+    title: t('trigger.title'),
+    onClick: () => {
+      store.open = !store.open
+      store.emit()
+      if (layout) { if (store.open) layout.openDetails(); else layout.closeDetails() }
+    },
+  }, h(TriggerIcon, { size: 15 }), 'SSEye')
 }
 
 /* ------------------------------------------------------------------ */
@@ -895,6 +923,15 @@ export function apply(ctx: ClientContext): void {
   const slots = ctx.get('slots') as SlotsService | undefined
   if (slots === undefined) return
   layout = ctx.get('layout') as LayoutService | undefined
+
+  // The host's plugin config decides the UI locale; English is already in
+  // effect, so a missing route (old host, non-web profile) just keeps it.
+  // Both rendered surfaces subscribe to the store, so the arrival re-renders
+  // them into the configured language.
+  api('/config').then((c) => {
+    setLocale(normalizeLocale(c && c.locale))
+    store.emit()
+  }).catch(() => {})
 
   // Composition clients have no `styles` builtin: own the <style> tag on the fiber.
   ctx.effect(() => {
@@ -909,16 +946,7 @@ export function apply(ctx: ClientContext): void {
     { name: 'conversation.session.header.utilities', id: 'sseye-trigger', label: 'SSEye' },
     (props: any) => {
       if (props && props.sessionId) store.sessionId = String(props.sessionId)
-      return h('button', {
-        className: 'sseye-hbtn',
-        'data-active': store.open ? '' : undefined,
-        title: 'SSEye · LLM 调试台',
-        onClick: () => {
-          store.open = !store.open
-          store.emit()
-          if (layout) { if (store.open) layout.openDetails(); else layout.closeDetails() }
-        },
-      }, h(TriggerIcon, { size: 15 }), 'SSEye')
+      return h(TriggerButton)
     },
   ))
 

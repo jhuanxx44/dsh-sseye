@@ -18,6 +18,36 @@ import type { Context } from '@deepseek-ai/cordis'
 
 const ROUTE_PREFIX = '/__sseye'
 
+/* ------------------------------------------------------------------ */
+/* Plugin config (composition row config, e.g. an id-targeted override  */
+/* in the profile's cordis.patch.yml: `- id: sseye` + `config.locale`)  */
+/* ------------------------------------------------------------------ */
+
+interface SseyeConfig {
+  /** UI + truncation-marker language: 'en' (default) or any 'zh*' tag. */
+  locale?: string
+}
+
+type Locale = 'en' | 'zh'
+
+function normalizeLocale(v: unknown): Locale {
+  return typeof v === 'string' && v.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
+/** Set in apply() from the row config; markers read it at capture time. */
+let locale: Locale = 'en'
+
+/** Markers embedded into truncated content; they follow the UI locale. */
+function truncTotalNote(total: number): string {
+  return locale === 'zh' ? '\n…[截断，共 ' + total + ' 字符]' : '\n…[truncated, total ' + total + ' chars]'
+}
+function truncStreamNote(max: number): string {
+  return locale === 'zh' ? '\n…[截断，流内容超过 ' + max + ' 字符上限]' : '\n…[truncated, stream continued past ' + max + ' chars]'
+}
+function liveTruncNote(total: number): string {
+  return locale === 'zh' ? '\n…[live 截断，共 ' + total + ' 字符]' : '\n…[live truncated, total ' + total + ' chars]'
+}
+
 interface Policy {
   sources: Record<'agent' | 'compaction' | 'title' | 'other', boolean>
   fields: Record<'system' | 'messages' | 'tools' | 'reasoning' | 'text' | 'toolArgs', boolean>
@@ -174,7 +204,7 @@ function capString(s: unknown): unknown {
   if (typeof s !== 'string') return s
   const max = policy.limits.maxString
   if (s.length <= max) return s
-  return s.slice(0, max) + '\n…[truncated, total ' + s.length + ' chars]'
+  return s.slice(0, max) + truncTotalNote(s.length)
 }
 
 /**
@@ -255,7 +285,7 @@ function appendBlock(b: CapturedBlock, field: 'text' | 'reasoning' | 'args', t: 
   const cur = b[field]
   if (cur.length >= max) return
   if (cur.length + t.length <= max) { b[field] = cur + t; return }
-  b[field] = (cur + t).slice(0, max) + '\n…[truncated, stream continued past ' + max + ' chars]'
+  b[field] = (cur + t).slice(0, max) + truncStreamNote(max)
 }
 
 function observeChunk(rec: Record_, chunk: any): void {
@@ -503,7 +533,7 @@ const LIVE_TEXT_CAP = 24000
 /** Enough for the client's 20k display cap plus slack; a marker keeps the
  *  truncation honest until the settled full /get restores the whole text. */
 function liveCap(s: string): string {
-  return s.length <= LIVE_TEXT_CAP ? s : s.slice(0, LIVE_TEXT_CAP) + '\n…[live 截断，共 ' + s.length + ' 字符]'
+  return s.length <= LIVE_TEXT_CAP ? s : s.slice(0, LIVE_TEXT_CAP) + liveTruncNote(s.length)
 }
 function liveBlock(b: CapturedBlock): CapturedBlock {
   if (b.text.length <= LIVE_TEXT_CAP && b.reasoning.length <= LIVE_TEXT_CAP && b.args.length <= LIVE_TEXT_CAP) return b
@@ -638,6 +668,10 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
       sendJson(res, null)
       return
     }
+    if (req.method === 'GET' && sub === '/config') {
+      sendJson(res, { locale })
+      return
+    }
     if (req.method === 'GET' && sub === '/policy') {
       sendJson(res, cloneJson(policy))
       return
@@ -670,7 +704,9 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 export const name = 'sseye'
 
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config?: SseyeConfig): void {
+  locale = normalizeLocale(config && config.locale)
+
   const svcs: Svcs = {
     llm: ctx.get('llm') as Svcs['llm'],
     settings: ctx.get('settings') as Svcs['settings'],
@@ -769,5 +805,5 @@ export function apply(ctx: Context): void {
     web.effect(() => webServer.register({ kind: 'prefix', path: ROUTE_PREFIX, handler: handleHttp }), 'sseye: http routes')
   })
 
-  console.log('dsh-sseye: llm/stream capture active, capacity ' + policy.limits.capacity)
+  console.log('dsh-sseye: llm/stream capture active, capacity ' + policy.limits.capacity + ', locale ' + locale)
 }

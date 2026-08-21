@@ -245,7 +245,7 @@ test('live /get returns only the streaming fields, not the request-side heavy ha
   // Live block text is capped for the transfer; chars keeps the true total.
   assert.ok(live.blocks[0].text.length < 26000, 'live block text capped')
   assert.match(live.blocks[0].text, /^partial/)
-  assert.match(live.blocks[0].text, /live 截断/)
+  assert.match(live.blocks[0].text, /live truncated/)
   assert.equal(live.blocks[0].chars, 'partial'.length + long.length)
   // The multi-megabyte request-side half must not be in a live tick.
   assert.ok(!('request' in live), 'no request in live payload')
@@ -260,6 +260,59 @@ test('live /get returns only the streaming fields, not the request-side heavy ha
 
   // Unknown ids answer null in both modes.
   assert.equal(JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?live=1&id=nope')).body), null)
+})
+
+test('/config echoes the locale; a zh row config localizes truncation markers', async () => {
+  // boot() applies with no config → default English.
+  {
+    const { stream, handler } = await boot()
+    const cfg = JSON.parse((await callRoute(handler, 'GET', '/__sseye/config')).body)
+    assert.equal(cfg.locale, 'en')
+
+    await callRoute(handler, 'POST', '/__sseye/policy', { limits: { maxString: 1000 } })
+    const long = 'x'.repeat(1500)
+    const tapped = stream(
+      { provider: 'p', model: 'm', system: long, messages: [] },
+      async function* () { yield { type: 'finish', reason: 'stop' } },
+    )
+    for await (const _ of tapped) {}
+    const items = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+    const d = JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?id=' + items[0].id)).body)
+    assert.match(d.request.system, /truncated, total 1500 chars/)
+  }
+
+  // Re-applying with a zh row config switches the markers and the echo.
+  {
+    const { ctx, listeners, routes } = fakeCtx()
+    sseye.apply(ctx, { locale: 'zh-CN' })
+    const handler = routes[0].handler
+    const cfg = JSON.parse((await callRoute(handler, 'GET', '/__sseye/config')).body)
+    assert.equal(cfg.locale, 'zh')
+
+    await callRoute(handler, 'POST', '/__sseye/clear')
+    await callRoute(handler, 'POST', '/__sseye/policy', { limits: { maxString: 1000, maxBlock: 1000 } })
+    const long = 'x'.repeat(1500)
+    const tapped = listeners['llm/stream'](
+      { provider: 'p', model: 'm', system: long, messages: [] },
+      async function* () {
+        yield { type: 'text-delta', index: 0, text: long }
+        yield { type: 'finish', reason: 'stop' }
+      },
+    )
+    for await (const _ of tapped) {}
+    const items = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+    const d = JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?id=' + items[0].id)).body)
+    assert.match(d.request.system, /截断，共 1500 字符/)
+    assert.match(d.blocks[0].text, /截断，流内容超过 1000 字符上限/)
+  }
+
+  // Unrecognized values fall back to English (and leave it in effect).
+  {
+    const { ctx, routes } = fakeCtx()
+    sseye.apply(ctx, { locale: 'fr' })
+    const cfg = JSON.parse((await callRoute(routes[0].handler, 'GET', '/__sseye/config')).body)
+    assert.equal(cfg.locale, 'en')
+  }
 })
 
 test('redaction patterns are precompiled per policy change and apply at capture time', async () => {
