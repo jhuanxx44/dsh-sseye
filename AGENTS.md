@@ -65,7 +65,10 @@ Sibling project (`~/code/sseye`): network-layer (mitmproxy) LLM API debugger. ds
 
 ## Development
 
-- Language: TypeScript source, compiled `lib/` committed (DSH installs plugins from git; see `dsh-llm-inspector` precedent).
-- Manifest: `dsh.bundle` (required for `dsh plugin add` distribution).
+- Layout: standard DSH plugin — `src/index.ts` (Host), `src/client/` (Web client), `cordis.patch.yml` (bundle layer), `lib/` built by tsdown and committed (DSH installs plugins from git; `prepare` rebuilds on install).
+- Host↔Client: composition plugins have no package-private RPC — the Host registers same-origin HTTP routes on the `webServer` service (`/__sseye/*`), the Client fetches them.
+- Client bundle contract (single CJS file, `window.__ModuleLoader__.load` wrapper, platform externals via injected `require`) lives in `tsdown.config.ts`; platform externals = react family + `@deepseek-ai/dsh-client-{runtime/client,ui-slots,ui-primitives}` + cordis. tsdown ≥0.22 required (deps.neverBundle/alwaysBundle API).
+- Manifest: `package.json` declares both `dsh.bundle.patch` (profile layer) and `dsh.client` (web module scan); `dsh plugin add` reconciles the layer list from installed state.
 - Tests: `node --test`, zero-dependency where possible.
+- `prototype/` is the validated dynamic-plugin original — keep it; its README holds the field-notes (stale-run, theme tokens, slot contracts).
 - License: MIT.

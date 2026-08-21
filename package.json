@@ -1,0 +1,52 @@
+{
+  "name": "dsh-sseye",
+  "version": "0.1.0",
+  "description": "The LLM debug console inside DeepSeek Harness — capture every model call, see everything, replay anything.",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "llm",
+    "debugging"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jhuanxx44/dsh-sseye.git"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "watch": "tsdown --watch",
+    "prepare": "tsdown",
+    "test": "node --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0",
+    "tsdown": "^0.22.14"
+  }
+}
