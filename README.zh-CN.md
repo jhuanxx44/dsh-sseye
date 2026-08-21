@@ -8,6 +8,11 @@
 
 它是 [SSEye](#与-sseye-的关系) 在 harness 内部的兄弟项目——同一套诊断哲学，换个观察层。
 
+<p>
+  <img src="assets/screenshot-panel.png" width="360" alt="SSEye 面板：按轮次分组的调用列表，行内展开详情——provider/model、TTFT/时长/用量统计、cache 命中条、Prompt 与消息分区">
+  <img src="assets/screenshot-policy.png" width="360" alt="SSEye 抓取策略面板：来源与字段开关、容量上限、脱敏正则">
+</p>
+
 ## 安装
 
 ```bash
@@ -21,6 +26,18 @@ dsh plugin --profile web add github:jhuanxx44/dsh-sseye
 ```bash
 dsh plugin --profile web remove dsh-sseye
 ```
+
+## 配置
+
+界面**默认为英文**。要切成中文（连同捕获内容里的截断标记），在 profile 的补丁层 `~/.dsh/profiles/<profile>/cordis.patch.yml` 里按 id 覆盖插件行配置：
+
+```yaml
+- id: sseye
+  config:
+    locale: zh-CN
+```
+
+改完重启 harness。任何以 `zh` 开头的值都选中文；其他值（或不配置）为英文。
 
 ## 已实现的功能
 
@@ -44,6 +61,7 @@ dsh plugin --profile web remove dsh-sseye
 - **JSON 导出**：单条（行悬停 / hero 按钮）或整组（bundle）；带版本号的自描述 payload。
 - **流式实时视图**：调用进行中时只轮询并在打开的详情里合并「会变的字段」；空闲时退避，面板关闭或标签页隐藏时完全暂停。
 - 本会话 / 全部过滤；一键清空。
+- **中英双语界面**：默认英文，`config.locale: zh-CN` 切中文（见上文配置）。
 
 面板停靠在 shell 右侧 details 列，接管该列（原工具详情面板在卸载后恢复）。[docs/harness-patches.md](docs/harness-patches.md) 有加宽该列的本地补丁。
 
