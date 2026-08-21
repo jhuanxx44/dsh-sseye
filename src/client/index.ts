@@ -341,11 +341,14 @@ function StepRow(props: { it: any; onSelect: () => void }) {
     dot(it.status),
     h('span', { key: 's', className: 'sseye-stepchip' }, it.step !== undefined && it.step !== null ? 'S' + it.step : (it.source || '')),
   ]
-  kids.push(h('span', { key: 't', className: 'sseye-dim' }, fmtTime(it.startedAt)))
+  // Display priority: the content preview wins over the right-side metrics.
+  // styles.ts carries container queries that progressively hide usage → TTFT →
+  // time as the list column narrows; duration stays visible the longest.
+  kids.push(h('span', { key: 't', className: 'sseye-dim sseye-time' }, fmtTime(it.startedAt)))
   kids.push(h('span', { key: 'p', className: 'sseye-prev' }, it.replyPreview || it.preview || ''))
-  if (it.ttftMs !== undefined) kids.push(h('span', { key: 'ttft', className: 'sseye-dim' }, 'TTFT ' + fmtDur(it.ttftMs)))
-  kids.push(h('span', { key: 'd', className: 'sseye-dim' }, fmtDur(it.durationMs)))
-  if (it.usage) kids.push(h('span', { key: 'u', className: 'sseye-dim' }, usageText(it.usage)))
+  if (it.ttftMs !== undefined) kids.push(h('span', { key: 'ttft', className: 'sseye-dim sseye-ttft' }, 'TTFT ' + fmtDur(it.ttftMs)))
+  kids.push(h('span', { key: 'd', className: 'sseye-dim sseye-dur' }, fmtDur(it.durationMs)))
+  if (it.usage) kids.push(h('span', { key: 'u', className: 'sseye-dim sseye-u' }, usageText(it.usage)))
   kids.push(h('button', {
     key: 'dl',
     className: 'sseye-dl',
