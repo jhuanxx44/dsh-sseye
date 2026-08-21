@@ -361,6 +361,31 @@ function StepRow(props: { it: any; onSelect: () => void }) {
   return h('div', { className: cls, onClick: props.onSelect }, kids)
 }
 
+/** Toggle the inline detail of one step row (accordion: one expanded at a time). */
+function toggleStep(id: string): void {
+  if (store.selectedId === id) {
+    store.selectedId = null
+    store.detail = null
+  } else {
+    store.selectedId = id
+    store.detail = null
+    api('/get?id=' + encodeURIComponent(id)).then((d) => {
+      if (d && store.selectedId === d.id) { store.detail = d; store.emit() }
+    }).catch(logErr('get:select'))
+  }
+  store.emit()
+}
+
+/** Step rows with the expanded step's detail interleaved right below its row. */
+function stepRows(g: Group): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  for (const it of g.rows) {
+    out.push(h(StepRow, { key: it.id, it, onSelect: () => toggleStep(it.id) }))
+    if (store.selectedId === it.id) out.push(h(InlineDetail, { key: it.id + ':d' }))
+  }
+  return out
+}
+
 function TurnGroup(props: { g: Group }) {
   const g = props.g
   const isOpen = store.openGroups[g.key] !== false
@@ -395,15 +420,7 @@ function TurnGroup(props: { g: Group }) {
           download(exportUrl(ids, gname))
         },
       }, h(DownloadIcon))),
-    isOpen ? h('div', { className: 'sseye-steps' }, g.rows.map((it) => h(StepRow, {
-      key: it.id, it,
-      onSelect: () => {
-        store.selectedId = it.id
-        store.detail = null
-        store.emit()
-        api('/get?id=' + encodeURIComponent(it.id)).then((d) => { if (d) store.detail = d; store.emit() }).catch(logErr('get:select'))
-      },
-    }))) : null)
+    isOpen ? h('div', { className: 'sseye-steps' }, stepRows(g)) : null)
 }
 
 function Section(props: { title: React.ReactNode; defaultOpen?: boolean; children?: React.ReactNode }) {
@@ -517,9 +534,26 @@ function Hero(props: { d: any }) {
     cacheBar)
 }
 
+/**
+ * Inline expansion of one step row: renders Detail directly under the row,
+ * inside the single list scroll flow (no second pane, no second scrollbar).
+ * On mount, nudges the scroll just enough to bring the expanded content into
+ * view — `nearest` never jumps when the row is already visible.
+ */
+function InlineDetail() {
+  const ref = React.useRef<HTMLDivElement | null>(null)
+  React.useEffect(() => {
+    const el = ref.current
+    if (el && typeof el.scrollIntoView === 'function') {
+      try { el.scrollIntoView({ block: 'nearest' }) } catch {}
+    }
+  }, [])
+  return h('div', { className: 'sseye-detail', ref }, h(Detail))
+}
+
 function Detail() {
   const d = store.detail
-  if (!d) return h('div', { className: 'sseye-detail' }, h('div', { className: 'sseye-empty' }, '加载中…'))
+  if (!d) return h('div', { className: 'sseye-empty' }, '加载中…')
   const req = d.request || {}
   const kids: React.ReactNode[] = []
 
@@ -584,7 +618,7 @@ function Detail() {
   if (d.finishReason !== undefined) {
     kids.push(h('div', { key: 'fin', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'Finish'), copyableJson(d.finishReason)))
   }
-  return h('div', { className: 'sseye-detail' }, kids)
+  return h('div', null, kids)
 }
 
 function PolicyPanel() {
@@ -699,12 +733,13 @@ function Panel() {
         onClick: () => { store.open = false; store.emit(); if (layout) layout.closeDetails() },
       }, '关闭')),
     store.showPolicy ? h(PolicyPanel) : null,
+    // Single scroll flow: the list column is the only scrolling region; step
+    // details expand inline under their row (see stepRows/InlineDetail).
     h('div', { className: 'sseye-body' },
       h('div', { className: 'sseye-listcol' },
         groups.length === 0
           ? h('div', { className: 'sseye-empty' }, '暂无捕获。发起一次对话或调用后此处出现记录。')
-          : groups.map((g) => h(TurnGroup, { key: g.key, g }))),
-      store.selectedId ? h(Detail) : null))
+          : groups.map((g) => h(TurnGroup, { key: g.key, g })))))
 }
 
 /* ------------------------------------------------------------------ */
