@@ -333,7 +333,21 @@ function pull(): Promise<void> {
   if (store.selectedId && cur && cur.id === store.selectedId && cur.status === 'running') {
     jobs.push(api('/get?live=1&id=' + encodeURIComponent(store.selectedId)).then((live: any) => {
       // The selection may have changed while the request was in flight.
-      if (!live || live.id !== cur.id || store.detail !== cur) return
+      if (store.detail !== cur) return
+      if (!live) {
+        // The record left the ring buffer (evicted by capacity or a clear):
+        // drop the stale selection instead of firing a null-answer live
+        // request every busy tick forever — the loop's busy-rate exit needs
+        // the phantom 'running' detail gone. The row is already out of the
+        // list, so nothing visual changes.
+        if (store.selectedId === cur.id) {
+          store.selectedId = null
+          store.detail = null
+          store.emit()
+        }
+        return
+      }
+      if (live.id !== cur.id) return
       for (const k of LIVE_KEYS) {
         if (live[k] !== undefined) (cur as Record<string, unknown>)[k] = live[k]
       }
