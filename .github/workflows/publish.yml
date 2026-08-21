@@ -1,0 +1,62 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets npm attach provenance attestations automatically when publishing
+      # from GitHub Actions.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      # Unlike dsh-paste-path (dependency-free plain JS), this package builds
+      # src/ -> lib/ with tsdown, so the workflow installs devDependencies.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # lib/ is committed by convention (AGENTS.md: DSH installs plugins from
+      # git). Fail before publishing if the committed artifacts are stale
+      # relative to src/.
+      - name: Verify committed lib/ is up to date
+        run: |
+          git diff --exit-code -- lib/ || {
+            echo "::error::lib/ is stale — run 'pnpm build' and commit the artifacts."
+            exit 1
+          }
+
+      # Tests run against the built artifact (lib/index.js), so they execute
+      # after the build step.
+      - name: Run tests
+        run: pnpm test
+
+      - name: Verify tag matches package.json version
+        if: github.ref_type == 'tag'
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+
+      # npm publish runs the `prepare` script (tsdown), rebuilding lib/ from
+      # the installed toolchain before packing.
+      - name: npm publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
