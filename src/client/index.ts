@@ -348,6 +348,15 @@ function Section(props: { title: React.ReactNode; defaultOpen?: boolean; childre
     open ? props.children : null)
 }
 
+function msgChars(m: any): number {
+  try {
+    const c = m ? m.content : undefined
+    if (typeof c === 'string') return c.length
+    if (c === undefined) return 0
+    return JSON.stringify(c).length
+  } catch { return 0 }
+}
+
 function MessageView(props: { m: any; isNew?: boolean }) {
   const m = props.m
   const role = m && typeof m.role === 'string' ? m.role : 'unknown'
@@ -363,7 +372,16 @@ function MessageView(props: { m: any; isNew?: boolean }) {
     if (has) body = copyableJson(rest)
   }
   return h('div', { className: 'sseye-msg' + (props.isNew ? ' sseye-msg-new' : '') },
-    h('span', { className: 'sseye-chip' }, role), body)
+    h('div', { className: 'sseye-msg-head' },
+      h('span', { className: 'sseye-role sseye-role-' + role }, role),
+      h('span', { className: 'sseye-dim' }, msgChars(m) + ' 字符')),
+    body)
+}
+
+const BLOCK_KIND_COLOR: Record<string, string> = {
+  text: 'var(--dsw-alias-brand-primary,#4f8cff)',
+  reasoning: '#a371f7',
+  'tool-call': 'var(--dsw-alias-state-warn-primary,#f0b429)',
 }
 
 function BlockView(props: { b: any }) {
@@ -375,7 +393,48 @@ function BlockView(props: { b: any }) {
     const args = tryParse(b.args)
     body = args.ok ? copyableJson(args.value) : copyablePre(cap(b.args, 20000), 'sseye-pre')
   } else if (b.text) body = copyablePre(cap(b.text, 20000), 'sseye-pre')
-  return h('div', { className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, label), body)
+  const color = BLOCK_KIND_COLOR[b.kind] || 'var(--dsw-alias-label-secondary,#8b949e)'
+  return h('div', { className: 'sseye-sec' },
+    h('div', { className: 'sseye-sec-title' }, h('span', { className: 'sseye-bdot', style: { background: color } }), label),
+    body)
+}
+
+function Stat(props: { label: string; value: string }) {
+  return h('div', { className: 'sseye-stat' },
+    h('div', { className: 'sseye-stat-l' }, props.label),
+    h('div', { className: 'sseye-stat-v' }, props.value))
+}
+
+function Hero(props: { d: any }) {
+  const d = props.d
+  const req = d.request || {}
+  const u = d.usage || {}
+  const stats: React.ReactNode[] = []
+  if (d.ttftMs !== undefined) stats.push(h(Stat, { key: 'ttft', label: 'TTFT', value: fmtDur(d.ttftMs) }))
+  if (d.durationMs !== undefined) stats.push(h(Stat, { key: 'dur', label: '总时长', value: fmtDur(d.durationMs) }))
+  stats.push(h(Stat, { key: 'ch', label: 'chunks', value: String(d.chunks) }))
+  if (typeof u.inputTokens === 'number') stats.push(h(Stat, { key: 'in', label: 'input', value: String(u.inputTokens) }))
+  if (typeof u.outputTokens === 'number') stats.push(h(Stat, { key: 'out', label: 'output', value: String(u.outputTokens) }))
+  if (typeof u.cacheReadTokens === 'number') stats.push(h(Stat, { key: 'cr', label: 'cache read', value: String(u.cacheReadTokens) }))
+  let cacheBar: React.ReactNode = null
+  if (typeof u.cacheReadTokens === 'number' && typeof u.inputTokens === 'number' && u.inputTokens + u.cacheReadTokens > 0) {
+    const ratio = u.cacheReadTokens / (u.inputTokens + u.cacheReadTokens)
+    cacheBar = h('div', { className: 'sseye-cache', title: 'cacheReadTokens / (inputTokens + cacheReadTokens)' },
+      h('div', { className: 'sseye-cache-track' }, h('div', { className: 'sseye-cache-fill', style: { width: (ratio * 100).toFixed(1) + '%' } })),
+      h('span', { className: 'sseye-cache-label' }, 'cache 命中 ' + (ratio * 100).toFixed(1) + '%'))
+  }
+  return h('div', { className: 'sseye-hero' },
+    h('div', { className: 'sseye-hero-top' },
+      dot(d.status),
+      h('span', { className: 'sseye-hero-model' }, String(req.provider || '') + '/' + String(req.model || '')),
+      d.protocol ? h('span', { className: 'sseye-chip sseye-chip-accent', title: d.api ? d.api + (d.protocolGuessed ? '（按 provider 猜测）' : '（来自 provider 配置）') : undefined }, (d.protocolGuessed ? '~' : '') + d.protocol) : null,
+      d.source ? h('span', { className: 'sseye-chip' }, d.source) : null,
+      d.turn !== undefined && d.turn !== null ? h('span', { className: 'sseye-chip' }, 'T' + d.turn + ' · S' + d.step) : null,
+      h('span', { className: 'sseye-spacer' }),
+      h('span', { className: 'sseye-dim' }, fmtTime(d.startedAt))),
+    d.baseURL !== undefined ? h('div', { className: 'sseye-hero-ep' }, String(d.baseURL)) : null,
+    h('div', { className: 'sseye-stats' }, stats),
+    cacheBar)
 }
 
 function Detail() {
@@ -383,25 +442,18 @@ function Detail() {
   if (!d) return h('div', { className: 'sseye-detail' }, h('div', { className: 'sseye-empty' }, '加载中…'))
   const req = d.request || {}
   const kids: React.ReactNode[] = []
-  const meta: React.ReactNode[] = []
-  meta.push(h('span', { key: 'st', className: 'sseye-chip' }, d.status || ''))
-  if (d.source) meta.push(h('span', { key: 'so', className: 'sseye-chip' }, d.source))
-  if (d.protocol) meta.push(h('span', { key: 'pr', className: 'sseye-chip', title: d.api ? d.api + (d.protocolGuessed ? '（按 provider 猜测）' : '（来自 provider 配置）') : undefined }, (d.protocolGuessed ? '~' : '') + d.protocol))
-  if (d.turn !== undefined && d.turn !== null) meta.push(h('span', { key: 'ts', className: 'sseye-chip' }, 'T' + d.turn + ' · S' + d.step))
-  if (d.ttftMs !== undefined) meta.push(h('span', { key: 'tt', className: 'sseye-chip' }, 'TTFT ' + fmtDur(d.ttftMs)))
-  if (d.durationMs !== undefined) meta.push(h('span', { key: 'du', className: 'sseye-chip' }, '总时长 ' + fmtDur(d.durationMs)))
-  meta.push(h('span', { key: 'ch', className: 'sseye-chip' }, d.chunks + ' chunks'))
-  kids.push(h('div', { key: 'meta', className: 'sseye-sec' }, meta))
+
+  kids.push(h(Hero, { key: 'hero', d }))
 
   if (d.error) kids.push(h('div', { key: 'err', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title sseye-err' }, '错误'), copyablePre(String(d.error), 'sseye-pre sseye-err')))
-  if (d.usage) kids.push(h('div', { key: 'us', className: 'sseye-sec' }, h('div', { className: 'sseye-sec-title' }, 'Usage'), copyableJson(d.usage)))
 
-  kids.push(h('div', { key: 'rq', className: 'sseye-sec' },
-    h('div', { className: 'sseye-sec-title' }, '请求 · ' + String(req.provider || '') + '/' + String(req.model || '')),
-    d.baseURL !== undefined ? h('span', { className: 'sseye-chip', title: 'endpoint' }, String(d.baseURL)) : null,
-    req.reasoningEffort !== undefined ? h('span', { className: 'sseye-chip' }, 'effort ' + String(req.reasoningEffort)) : null,
-    req.temperature !== undefined ? h('span', { className: 'sseye-chip' }, 'temp ' + String(req.temperature)) : null,
-    req.maxTokens !== undefined ? h('span', { className: 'sseye-chip' }, 'max ' + String(req.maxTokens)) : null))
+  const params: React.ReactNode[] = []
+  if (req.reasoningEffort !== undefined) params.push(h('span', { key: 'ef', className: 'sseye-chip' }, 'effort ' + String(req.reasoningEffort)))
+  if (req.temperature !== undefined) params.push(h('span', { key: 'tp', className: 'sseye-chip' }, 'temp ' + String(req.temperature)))
+  if (req.maxTokens !== undefined) params.push(h('span', { key: 'mx', className: 'sseye-chip' }, 'max ' + String(req.maxTokens)))
+  if (params.length) kids.push(h('div', { key: 'prm', className: 'sseye-sec' }, params))
+
+  if (d.usage) kids.push(h(Section, { key: 'us', title: 'Usage JSON' }, copyableJson(d.usage)))
 
   if (typeof req.system === 'string' && req.system) {
     kids.push(h(Section, { key: 'sys', title: 'System Prompt（' + req.system.length + ' 字符）' },
