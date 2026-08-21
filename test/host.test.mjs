@@ -218,3 +218,77 @@ test('limits are runtime-tunable via /policy and clamped to bounds', async () =>
   assert.equal(clamped.limits.maxString, 20000000)
   assert.equal(clamped.limits.maxBlock, 1000, 'non-numeric ignored, previous value kept')
 })
+
+test('wire reconstruction expands tool-result user messages into role:"tool"', async () => {
+  const { stream, handler } = await boot()
+  const tapped = stream(
+    {
+      provider: 'deepseek-official',
+      model: 'deepseek-chat',
+      system: 'sys',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'run it' }] },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'reasoning', text: 'think ' },
+            { type: 'reasoning', text: 'hard' },
+            { type: 'text', text: 'calling' },
+            { type: 'tool-call', id: 'call_1', name: 'todo_write', arguments: '{"todos":[]}' },
+          ],
+        },
+        // Pure tool-result message: user-role in the normalized model.
+        {
+          role: 'user',
+          content: [{ type: 'tool-result', toolCallId: 'call_1', content: [{ type: 'text', text: 'Updated todo list.' }] }],
+        },
+        // Mixed user message: text first, then the tool result as its own entry.
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'and ' },
+            { type: 'text', text: 'again' },
+            { type: 'tool-result', toolCallId: 'call_2', content: [] },
+          ],
+        },
+      ],
+    },
+    async function* () { yield { type: 'finish', reason: 'stop' } },
+  )
+  for await (const _ of tapped) {}
+
+  const items = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  const d = JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?id=' + items[0].id)).body)
+  const w = d.wire
+  assert.equal(w.stream, true)
+
+  const msgs = w.messages
+  assert.equal(msgs[0].role, 'system')
+  assert.equal(msgs[0].content, 'sys')
+
+  assert.equal(msgs[1].role, 'user')
+  assert.equal(msgs[1].content, 'run it')
+
+  const a = msgs[2]
+  assert.equal(a.role, 'assistant')
+  assert.equal(a.content, 'calling')
+  assert.equal(a.reasoning_content, 'think hard', 'reasoning replayed on tool-call turns')
+  assert.equal(a.tool_calls.length, 1)
+  assert.equal(a.tool_calls[0].id, 'call_1')
+  assert.equal(a.tool_calls[0].type, 'function')
+  assert.equal(a.tool_calls[0].function.name, 'todo_write')
+  assert.equal(a.tool_calls[0].function.arguments, '{"todos":[]}')
+
+  const t1 = msgs[3]
+  assert.equal(t1.role, 'tool', 'tool-result expands to a standalone tool message')
+  assert.equal(t1.tool_call_id, 'call_1')
+  assert.equal(t1.content, 'Updated todo list.')
+
+  assert.equal(msgs[4].role, 'user')
+  assert.equal(msgs[4].content, 'and again', 'mixed user text joins before its tool results')
+
+  const t2 = msgs[5]
+  assert.equal(t2.role, 'tool')
+  assert.equal(t2.tool_call_id, 'call_2')
+  assert.equal(t2.content, '(no output)', 'empty tool-result content falls back like the adapter')
+})

@@ -425,6 +425,13 @@ function msgChars(m: any): number {
 function MessageView(props: { m: any; isNew?: boolean }) {
   const m = props.m
   const role = m && typeof m.role === 'string' ? m.role : 'unknown'
+  // The harness role vocabulary is system|user|assistant only — tool results
+  // ride in user-role messages as tool-result blocks. A pure tool-result
+  // message gets a precise chip so it never reads as human input; the wire
+  // layer expands it to a standalone {role:'tool'} message (see wireOf).
+  const pureToolResult = role === 'user' && Array.isArray(m.content) && m.content.length > 0
+    && m.content.every((b: any) => b && typeof b === 'object' && b.type === 'tool-result')
+  const shownRole = pureToolResult ? 'tool-result' : role
   let body: React.ReactNode = null
   const c = m ? m.content : undefined
   if (typeof c === 'string') body = copyablePre(cap(c, 20000), 'sseye-pre')
@@ -438,7 +445,10 @@ function MessageView(props: { m: any; isNew?: boolean }) {
   }
   return h('div', { className: 'sseye-msg' + (props.isNew ? ' sseye-msg-new' : '') },
     h('div', { className: 'sseye-msg-head' },
-      h('span', { className: 'sseye-role sseye-role-' + role }, role),
+      h('span', {
+        className: 'sseye-role sseye-role-' + (pureToolResult ? 'tool' : role),
+        title: pureToolResult ? '规范化层 role=user（工具结果块）；wire 层展开为 role:"tool"' : undefined,
+      }, shownRole),
       h('span', { className: 'sseye-dim' }, msgChars(m) + ' 字符')),
     body)
 }

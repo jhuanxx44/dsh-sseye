@@ -381,15 +381,87 @@ function sharedPrefixCount(rec: Record_): number {
   return 0
 }
 
+/** Adapter flattenText: join the text blocks of a message (user/tool-result content). */
+function flattenText(blocks: unknown): string {
+  if (!Array.isArray(blocks)) return ''
+  let out = ''
+  for (const b of blocks as any[]) {
+    if (b && typeof b === 'object' && b.type === 'text' && typeof b.text === 'string') out += b.text
+  }
+  return out
+}
+
+/**
+ * Mirror the DeepSeek chat-completions adapter's deterministic
+ * serializeMessages(): user text is joined into a string; assistant tool-call
+ * blocks become `tool_calls` (reasoning replayed as `reasoning_content` only
+ * on tool-call turns); each tool-result block becomes a standalone
+ * `{role:'tool'}` wire message — the harness models tool results as user-role
+ * messages, the wire does not. String content (legacy shapes) folds into a
+ * text block.
+ */
+function wireMessagesOf(req: any): unknown[] {
+  const wire: unknown[] = []
+  if (typeof req.system === 'string' && req.system) wire.push({ role: 'system', content: req.system })
+  if (Array.isArray(req.messages)) {
+    for (const m of req.messages as any[]) {
+      if (!m || typeof m !== 'object') continue
+      const blocks: any[] = Array.isArray(m.content)
+        ? m.content
+        : typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : []
+      if (m.role === 'system') {
+        wire.push({ role: 'system', content: flattenText(blocks) })
+        continue
+      }
+      if (m.role === 'assistant') {
+        const text = flattenText(blocks)
+        let reasoning = ''
+        const toolCalls: unknown[] = []
+        for (const b of blocks) {
+          if (!b || typeof b !== 'object') continue
+          if (b.type === 'reasoning' && typeof b.text === 'string') reasoning += b.text
+          else if (b.type === 'tool-call') {
+            toolCalls.push({ id: b.id, type: 'function', function: { name: b.name, arguments: b.arguments } })
+          }
+        }
+        const msg: Record<string, unknown> = { role: 'assistant', content: text }
+        if (toolCalls.length > 0 && reasoning.length > 0) msg.reasoning_content = reasoning
+        if (toolCalls.length > 0) msg.tool_calls = toolCalls
+        wire.push(msg)
+        continue
+      }
+      const toolResults = blocks.filter((b) => b && typeof b === 'object' && b.type === 'tool-result')
+      const text = flattenText(blocks)
+      if (text.length > 0 || toolResults.length === 0) wire.push({ role: 'user', content: text })
+      for (const r of toolResults) {
+        wire.push({ role: 'tool', tool_call_id: r.toolCallId, content: flattenText(r.content) || '(no output)' })
+      }
+    }
+  }
+  return wire
+}
+
+/**
+ * Reconstructed chat-completions request body. Field-level shape mirrors the
+ * DeepSeek adapter's serializeRequest; the effort resolution covers its
+ * deterministic cases only (undefined effort depends on adapter-level thinking
+ * defaults, which capture time cannot see — those emit nothing).
+ */
 function wireOf(req: any): Record<string, unknown> {
-  const messages: unknown[] = []
-  if (typeof req.system === 'string' && req.system) messages.push({ role: 'system', content: req.system })
-  if (Array.isArray(req.messages)) for (const m of req.messages) messages.push(m)
-  const out: Record<string, unknown> = { model: req.model, messages, stream: true, stream_options: { include_usage: true } }
+  const out: Record<string, unknown> = {
+    model: req.model,
+    messages: wireMessagesOf(req),
+    stream: true,
+    stream_options: { include_usage: true },
+  }
   if (Array.isArray(req.tools) && req.tools.length > 0) {
     out.tools = req.tools.map((t: any) => ({ type: 'function', function: { name: t && t.name, description: t && t.description, parameters: t && t.parameters } }))
   }
-  if (req.reasoningEffort !== undefined) out.reasoning_effort = req.reasoningEffort
+  if (req.purpose === 'session-title' || req.reasoningEffort === 'off') out.thinking = { type: 'disabled' }
+  else if (req.reasoningEffort === 'high' || req.reasoningEffort === 'max') {
+    out.thinking = { type: 'enabled' }
+    out.reasoning_effort = req.reasoningEffort
+  }
   if (req.temperature !== undefined) out.temperature = req.temperature
   if (req.maxTokens !== undefined) out.max_tokens = req.maxTokens
   if (req.stop !== undefined) out.stop = req.stop
