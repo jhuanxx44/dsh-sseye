@@ -647,8 +647,17 @@ export function apply(ctx: ClientContext): void {
   // Dock into the shell's right details column (grid sibling of the
   // conversation, draggable divider owned by the shell) instead of a
   // floating overlay. Trade-off: this shadows the shipped tool-details panel.
+  //
+  // `details` is a single slot and dsh-client-ui-conversation already occupies
+  // it with its DetailsPanel at the default priority 0. Shadowing is a
+  // priority contest, not a land grab: entries on one cell coexist at
+  // *distinct* priorities sorted ascending, and the lowest live entry renders.
+  // Registering at 0 collides with the occupant and throws
+  // ("single slot already has a registration at priority 0"), which fails the
+  // whole plugin load. -1 sits below the shipped panel, so this renders and
+  // the core entry stays live underneath as the fallback.
   slots.inject('details', () => slots.register(
-    { name: 'details' },
+    { name: 'details', priority: -1 },
     (props: any) => {
       if (props && props.sessionId) store.sessionId = String(props.sessionId)
       return h(Panel)

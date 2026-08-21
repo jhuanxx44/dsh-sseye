@@ -547,12 +547,18 @@ export function apply(ctx: Context): void {
     return tap
   })
 
-  const webServer = ctx.get('webServer') as { register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }): () => void } | undefined
-  if (webServer !== undefined) {
-    ctx.effect(() => webServer.register({ kind: 'prefix', path: ROUTE_PREFIX, handler: handleHttp }), 'sseye: http routes')
-  } else {
-    console.warn('dsh-sseye: webServer service unavailable — capture is active but the panel cannot reach records')
-  }
+  // The panel reaches the Host over same-origin routes, so registration must
+  // wait for the `webServer` service. Reading it with a bare `ctx.get` here
+  // races the composition: `webServer` mounts earlier in the tree but is not
+  // guaranteed to be in the store when this body runs, so the plugin would keep
+  // capturing while the panel silently had no route to fetch. `ctx.inject`
+  // defers this branch until the service is live and re-runs it if it reloads.
+  // Scoped to the routes only — capture itself stays active on profiles that
+  // have no webServer at all (tui, headless).
+  ctx.inject(['webServer'], (web: Context) => {
+    const webServer = web.get('webServer') as { register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }): () => void }
+    web.effect(() => webServer.register({ kind: 'prefix', path: ROUTE_PREFIX, handler: handleHttp }), 'sseye: http routes')
+  })
 
   console.log('dsh-sseye: llm/stream capture active, capacity ' + CAPACITY)
 }
