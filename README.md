@@ -31,7 +31,7 @@ Standard DSH plugin form (host + web client halves):
 │   └── client/           # Client half: header trigger + overlay panel (React, slots)
 ├── lib/                  # built artifacts (committed; rebuilt by `prepare` on git installs)
 ├── tsdown.config.ts      # self-contained port of the official client-bundle contract
-└── prototype/            # the validated dynamic-plugin prototype (historical reference)
+└── docs/                 # harness patches + prototype-era field notes
 ```
 
 Host ↔ Client transport is same-origin HTTP on the `webServer` service (`/__sseye/list|get|clear|policy|export`) — composition plugins have no package-private RPC.
@@ -48,7 +48,7 @@ Local install from the checkout: `dsh plugin --profile web add .` (links the dir
 
 ## Status
 
-Working capture + viewer + explicit JSON export (graduated from the validated `prototype/`, v1.9 parity): hover any step row or turn group header for a download button, or use 下载 in the detail hero; the host `/__sseye/export` route answers with an attachment. Capture limits — ring-buffer size (default 100), request-field truncation (200k chars), response-block truncation (1M chars) — are runtime-tunable from the 抓取策略 panel via `POST /__sseye/policy`. Diff / token anatomy / Replay & Mutate are not implemented yet. See [AGENTS.md](AGENTS.md) for the design contract.
+Working capture + viewer + explicit JSON export (graduated from the validated dynamic-plugin prototype, v1.9 parity — its field notes survive in `docs/prototype-field-notes.md`): hover any step row or turn group header for a download button, or use 下载 in the detail hero; the host `/__sseye/export` route answers with an attachment. Capture limits — ring-buffer size (default 100), request-field truncation (200k chars), response-block truncation (1M chars) — are runtime-tunable from the 抓取策略 panel via `POST /__sseye/policy`. Diff / token anatomy / Replay & Mutate are not implemented yet. See [AGENTS.md](AGENTS.md) for the design contract.
 
 ## Relationship to SSEye
 

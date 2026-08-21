@@ -1,13 +1,6 @@
-# prototype/ — 动态 Cordis 插件原型
+# 原型踩坑记录（prototype field notes）
 
-这是 dsh-sseye 的 v1 原型源码，以**动态 Cordis 插件**形态运行（不安装、进程内、会话级）。
-
-- `host.js` — Host 半：`code.host`。挂 `llm/stream` waterfall 捕获每次模型调用的完整 `GenerateOptions` 与响应 chunk 流；挂 `agent/request` 通过共享 `AbortSignal` 关联 turn/step 坐标；100 条 ring buffer；抓取策略（来源/字段/脱敏）；5 个 `harness.handle` RPC：`list` / `get` / `clear` / `get-policy` / `set-policy`。
-- `client.js` — Client 半：`code.client`。`sidebar.footer.action` 入口按钮 + `shell.overlay` 调试台面板（调用列表 / 详情 / 抓取策略区），1.5s `host.call` 轮询。
-
-## 运行方式
-
-在 cordis preset 会话里，把两个文件内容分别作为 `cordis_define` 的 `code.host` / `code.client` 提交，然后 `cordis_run` 激活。
+> 迁自 `prototype/README.md`（2026-08-21）。`prototype/` 是 dsh-sseye 毕业为 composition 插件前的**动态 Cordis 插件原型**（v1–v1.6），代码已随毕业删除（git 历史可考）。本文保留其踩坑记录与验证日志——这些是 DSH 动态插件开发的平台级经验，与本项目源码无关的部分同样适用于任何动态插件开发。
 
 ## 已验证（2026-08-20，DSH 0.1.0-rc.6 / kimi-k3）
 
@@ -19,7 +12,7 @@
 - v1.5.4：修复浅色模式黑底灰字——CSS 里 7 个主题 token（`--dsw-alias-bg-secondary` 等）在运行时**根本不存在**，深色模式下 fallback 恰好是深色而长期无感。写样式前必须 `Theme.listTokens` 实测
 - v1.6：协议 chip 改从真实配置读取——`llm.listConfigurableProviders()` 拿到 `settingsNs` + `settingsPath`，再 `settings.get(ns)` 读 profile 的 `api` / `baseURL`（如 `llm-pi-ai.providers.<route>.api`，值为 pi-ai 的 `KnownApi`：`openai-completions` / `openai-responses` / `anthropic-messages` / `google-generative-ai` …）；adapter 未声明协议的 route 才退回静态猜测表并以 `~` 标注。Wire JSON 重建仅在 `openai-completions` 下展示
 
-## 踩坑记录（毕业成独立插件时要带走的经验）
+## 踩坑记录
 
 1. **`harness.handle` 返回值必须是 lossless JSON**：不允许 `undefined` 值（可选字段要条件性省略，不要显式赋 `undefined`）、不允许 Date/Map/class 实例。
 2. **新页面不自动激活 Client 半**：`reconcileApprovals` 只处理 pending 状态的 attempt；已 committed 的 run 对新连接的页面显示「Client 待激活」，需要在「Cordis 插件」面板点「运行」（`startUserRun`，用户手势即授权）。毕业版若希望刷新后自动恢复，需要研究这一层。
