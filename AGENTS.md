@@ -70,5 +70,6 @@ Sibling project (`~/code/sseye`): network-layer (mitmproxy) LLM API debugger. ds
 - Client bundle contract (single CJS file, `window.__ModuleLoader__.load` wrapper, platform externals via injected `require`) lives in `tsdown.config.ts`; platform externals = react family + `@deepseek-ai/dsh-client-{runtime/client,ui-slots,ui-primitives}` + cordis. tsdown ≥0.22 required (deps.neverBundle/alwaysBundle API).
 - Manifest: `package.json` declares both `dsh.bundle.patch` (profile layer) and `dsh.client` (web module scan); `dsh plugin add` reconciles the layer list from installed state.
 - Tests: `node --test`, zero-dependency where possible.
+- Release: pushing a `v*` tag triggers `.github/workflows/publish.yml` — it builds, checks committed `lib/` is fresh, tests, verifies tag ↔ `package.json` version, then publishes to npm (tag-only; no manual dispatch). Bump version → commit → tag → push tag.
 - `prototype/` is the validated dynamic-plugin original — keep it; its README holds the field-notes (stale-run, theme tokens, slot contracts).
 - License: MIT.
