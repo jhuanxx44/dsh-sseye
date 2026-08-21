@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 jobs:
   publish:
@@ -51,7 +50,6 @@ jobs:
         run: pnpm test
 
       - name: Verify tag matches package.json version
-        if: github.ref_type == 'tag'
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
 
       # npm publish runs the `prepare` script (tsdown), rebuilding lib/ from
