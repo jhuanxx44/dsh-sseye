@@ -12,10 +12,63 @@ const policy = {
   redactions: [],
 }
 
-const PROTOCOLS = {
-  'deepseek-official': 'OpenAI Chat Completions',
-  'ollama-cloud': 'Ollama /api/chat (NDJSON)',
-  'newapi': 'OpenAI-compatible (NewAPI)',
+// Canonical pi-ai Api ids → friendly labels.
+const API_LABELS = {
+  'openai-completions': 'OpenAI Chat Completions',
+  'openai-responses': 'OpenAI Responses',
+  'azure-openai-responses': 'Azure OpenAI Responses',
+  'openai-codex-responses': 'OpenAI Codex Responses',
+  'anthropic-messages': 'Anthropic Messages',
+  'google-generative-ai': 'Google Generative AI',
+  'google-vertex': 'Google Vertex AI',
+  'mistral-conversations': 'Mistral Conversations',
+  'bedrock-converse-stream': 'AWS Bedrock ConverseStream',
+  'pi-messages': 'Pi Messages',
+  'ollama-chat': 'Ollama /api/chat (NDJSON)',
+}
+
+// Last-resort guesses for routes whose adapter exposes no configured protocol.
+const PROVIDER_API_FALLBACK = {
+  'deepseek-official': 'openai-completions',
+  'newapi': 'openai-completions',
+  'ollama-cloud': 'ollama-chat',
+}
+
+// provider → { at, api?, baseURL?, guessed? }
+const apiCache = new Map()
+const API_CACHE_TTL = 60000
+
+// Truth source: llm.listConfigurableProviders() + the provider's settings
+// profile (`api` / `baseURL` fields, e.g. llm-pi-ai.providers.<route>.api).
+function resolveRoute(svcs, provider) {
+  const hit = apiCache.get(provider)
+  if (hit && Date.now() - hit.at < API_CACHE_TTL) return hit
+  const out = { at: Date.now() }
+  try {
+    if (svcs.llm && svcs.settings) {
+      const entries = svcs.llm.listConfigurableProviders()
+      const entry = Array.isArray(entries) ? entries.find((e) => e && e.provider === provider) : undefined
+      if (entry) {
+        let node = svcs.settings.get(entry.settingsNs)
+        const path = Array.isArray(entry.settingsPath) ? entry.settingsPath : []
+        for (const p of path) if (node != null) node = node[p]
+        if (node && typeof node === 'object') {
+          if (typeof node.api === 'string' && node.api) out.api = node.api
+          if (typeof node.baseURL === 'string' && node.baseURL) out.baseURL = node.baseURL
+        }
+      }
+    }
+  } catch (e) {}
+  if (!out.api) {
+    const fb = PROVIDER_API_FALLBACK[provider]
+    if (fb) { out.api = fb; out.guessed = true }
+  }
+  apiCache.set(provider, out)
+  return out
+}
+
+function protocolLabel(api) {
+  return API_LABELS[api] || api
 }
 
 function sourceOf(options) {
@@ -179,8 +232,12 @@ function summary(rec) {
     preview: previewOf(rec),
     replyPreview: replyPreviewOf(rec),
   }
-  const proto = PROTOCOLS[rec.request.provider]
-  if (proto) out.protocol = proto
+  if (rec.api !== undefined) {
+    out.api = rec.api
+    out.protocol = protocolLabel(rec.api)
+    if (rec.apiGuessed) out.protocolGuessed = true
+  }
+  if (rec.baseURL !== undefined) out.baseURL = rec.baseURL
   if (rec.sessionId !== undefined) out.sessionId = rec.sessionId
   if (rec.turn !== undefined) out.turn = rec.turn
   if (rec.step !== undefined) out.step = rec.step
@@ -241,6 +298,8 @@ function detail(rec) {
 
 return {
   apply(ctx) {
+    const svcs = { llm: ctx.get('llm'), settings: ctx.get('settings') }
+
     ctx.on('agent/request', (payload, next) => {
       try {
         if (payload && payload.signal) {
@@ -278,6 +337,14 @@ return {
       }
       if (options.sessionId !== undefined && options.sessionId !== null) rec.sessionId = String(options.sessionId)
       if (coord) { rec.turn = coord.turn; rec.step = coord.step }
+      try {
+        const route = resolveRoute(svcs, options.provider)
+        if (route.api !== undefined) {
+          rec.api = route.api
+          if (route.guessed) rec.apiGuessed = true
+        }
+        if (route.baseURL !== undefined) rec.baseURL = route.baseURL
+      } catch (e) {}
 
       let inner
       try {

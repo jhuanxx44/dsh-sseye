@@ -345,7 +345,7 @@ return {
       const meta = []
       meta.push(h('span', { key: 'st', className: 'sseye-chip' }, d.status || ''))
       if (d.source) meta.push(h('span', { key: 'so', className: 'sseye-chip' }, d.source))
-      if (d.protocol) meta.push(h('span', { key: 'pr', className: 'sseye-chip' }, d.protocol))
+      if (d.protocol) meta.push(h('span', { key: 'pr', className: 'sseye-chip', title: d.api ? d.api + (d.protocolGuessed ? '（按 provider 猜测）' : '（来自 provider 配置）') : undefined }, (d.protocolGuessed ? '~' : '') + d.protocol))
       if (d.turn !== undefined && d.turn !== null) meta.push(h('span', { key: 'ts', className: 'sseye-chip' }, 'T' + d.turn + ' · S' + d.step))
       if (d.ttftMs !== undefined) meta.push(h('span', { key: 'tt', className: 'sseye-chip' }, 'TTFT ' + fmtDur(d.ttftMs)))
       if (d.durationMs !== undefined) meta.push(h('span', { key: 'du', className: 'sseye-chip' }, '总时长 ' + fmtDur(d.durationMs)))
@@ -357,6 +357,7 @@ return {
 
       kids.push(h('div', { key: 'rq', className: 'sseye-sec' },
         h('div', { className: 'sseye-sec-title' }, '请求 · ' + String(req.provider || '') + '/' + String(req.model || '')),
+        d.baseURL !== undefined ? h('span', { className: 'sseye-chip', title: 'endpoint' }, String(d.baseURL)) : null,
         req.reasoningEffort !== undefined ? h('span', { className: 'sseye-chip' }, 'effort ' + String(req.reasoningEffort)) : null,
         req.temperature !== undefined ? h('span', { className: 'sseye-chip' }, 'temp ' + String(req.temperature)) : null,
         req.maxTokens !== undefined ? h('span', { className: 'sseye-chip' }, 'max ' + String(req.maxTokens)) : null))
@@ -397,7 +398,7 @@ return {
           copyableJson(names)))
       }
 
-      if (d.wire) {
+      if (d.wire && (!d.api || d.api === 'openai-completions')) {
         kids.push(h(Section, { key: 'wire', title: 'Wire JSON（重建，近似）' },
           copyablePre(cap(safeStringify(d.wire), 40000), 'sseye-pre')))
       }

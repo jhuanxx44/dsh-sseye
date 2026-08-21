@@ -15,7 +15,9 @@
 - `agent/request` × `llm/stream` 经 AbortSignal 对象身份关联成功，记录标注 `T轮·S步`
 - 字段级策略实时生效（关掉 system 后新记录显示「按策略未捕获」）
 - 观察器零侵入：tee 的 chunk 原样转发，会话流式输出不受影响
-- v1.3：入口挂 `conversation.session.header.utilities`（Session log 旁）；列表按 Turn 分组（Turn N → S 步骤序列，组头聚合 token/耗时）；详情折叠「与前序共享的 N 条消息」只展开新增（带左侧高亮条）；本会话/全部过滤；协议 chip 为 provider 推断表（`LlmProviderInfo` 无协议字段，未知 provider 不显示，诚实留白）
+- v1.3：入口挂 `conversation.session.header.utilities`（Session log 旁）；列表按 Turn 分组（Turn N → S 步骤序列，组头聚合 token/耗时）；详情折叠「与前序共享的 N 条消息」只展开新增（带左侧高亮条）；本会话/全部过滤
+- v1.5.4：修复浅色模式黑底灰字——CSS 里 7 个主题 token（`--dsw-alias-bg-secondary` 等）在运行时**根本不存在**，深色模式下 fallback 恰好是深色而长期无感。写样式前必须 `Theme.listTokens` 实测
+- v1.6：协议 chip 改从真实配置读取——`llm.listConfigurableProviders()` 拿到 `settingsNs` + `settingsPath`，再 `settings.get(ns)` 读 profile 的 `api` / `baseURL`（如 `llm-pi-ai.providers.<route>.api`，值为 pi-ai 的 `KnownApi`：`openai-completions` / `openai-responses` / `anthropic-messages` / `google-generative-ai` …）；adapter 未声明协议的 route 才退回静态猜测表并以 `~` 标注。Wire JSON 重建仅在 `openai-completions` 下展示
 
 ## 踩坑记录（毕业成独立插件时要带走的经验）
 
@@ -27,3 +29,5 @@
 6. **Client 半绑定 pluginRunId，重跑后旧页面即变砖（stale-run）**：任何 `cordis_run` update/重跑之后，已加载旧 Client 半的页面上所有 `host.call` 都会收到 `stale-run` 错误（"belongs to an activation that has already been replaced"），且不会自愈——必须刷新页面并重新点「运行」。调试期若面板数据停滞，先怀疑这个。毕业成 composition 插件后此问题自然消失（客户端随页面加载）。
 7. **catch 空捕获会吃掉所有线索**：pkg-5→pkg-9 的谜题（详情加载不出、捕获看似归零）实际是 stale-run，被 `.catch(() => {})` 吞掉。所有 `host.call` 的 catch 至少要 `console.error`。
 8. **共享前缀对比对「易变前缀」脆弱**：如果请求头部包含每次调用都变的内容（如运行时上下文 system-reminder），shared prefix 会在 index 0-1 就断掉，退化为全量。v1.5.3 加了窗口化兜底（最新 30 条直渲，更早的懒挂载）。另外 sharedPrefixCount 是逐条 JSON.stringify 对比，700+ 条的记录要算几秒——毕业版应换 hash 指纹。
+9. **主题 token 必须实测，不能凭文档/命名习惯猜**：v1.5.4 之前 CSS 用了 7 个不存在的 token（`--dsw-alias-bg-secondary`、`--dsw-alias-label-tertiary`、`--dsw-alias-state-business-primary`、`--dsw-alias-interactive-bg-hover`、`--dsw-alias-markdown-code-block`、`--dsw-alias-button-ghost-active-fill`、`--dsw-alias-state-warn-label`），深色模式下 fallback 无感，浅色模式直接黑底灰字。实测可用清单以 `Theme.listTokens` 为准（本机 13 个：bg-base / bg-layer-1 / bg-layer-2 / bg-overlay / border-l1 / border-l2 / brand-primary / label-primary / label-secondary / state-error/success/warn-primary / sidebar-fill）。
+10. **协议真相在 settings profile，不在 llm 服务门面**：`LlmProviderInfo` / `LlmResolvedModelInfo` 都没有协议字段；但 `llm.listConfigurableProviders()` 给出 `settingsNs` + `settingsPath`，`settings.get(ns)` 沿路径取到 profile，`api` / `baseURL` 就在上面（pi-ai adapter）。注意 `settings.get` 拿到的是 live 解析结果，只读叶子字段，别整个塞进记录。
