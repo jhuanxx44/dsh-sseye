@@ -582,6 +582,13 @@ function PolicyPanel() {
   if (!p) return null
   const srcLabels: [string, string][] = [['agent', 'Agent 调用'], ['compaction', 'Compaction'], ['title', '会话标题'], ['other', '其他/重放']]
   const fldLabels: [string, string][] = [['system', 'system'], ['messages', 'messages'], ['tools', 'tools'], ['reasoning', 'reasoning'], ['text', '正文'], ['toolArgs', '工具参数']]
+  const lim = p.limits || {}
+  // [key, label, min, max, step] — bounds mirror LIMIT_BOUNDS on the host.
+  const limLabels: [string, string, number, number, number][] = [
+    ['capacity', '缓冲条数', 1, 5000, 10],
+    ['maxString', '请求字段截断', 1000, 20000000, 1000],
+    ['maxBlock', '响应块截断', 1000, 50000000, 10000],
+  ]
   return h('div', { className: 'sseye-policy' },
     h('div', null, '来源：', srcLabels.map((kv) =>
       h('label', { key: kv[0] }, h('input', {
@@ -603,6 +610,26 @@ function PolicyPanel() {
           setPolicy(patch)
         },
       }), kv[1]))),
+    h('div', { style: { marginTop: '6px' } }, '容量：', limLabels.map((it) =>
+      h('label', { key: it[0], title: '范围 ' + it[2] + ' – ' + it[3] + '，失焦生效' },
+        h('span', null, it[1]),
+        h('input', {
+          type: 'number',
+          className: 'sseye-num',
+          min: it[2], max: it[3], step: it[4],
+          // Remount when the echoed value changes so clamping becomes visible.
+          key: it[0] + '-' + (lim[it[0]] || 0),
+          defaultValue: lim[it[0]],
+          onBlur: (e: any) => {
+            const n = Math.round(Number(e.target.value))
+            if (!Number.isFinite(n) || n === lim[it[0]]) return
+            const patch = { limits: {} as Record<string, number> }
+            patch.limits[it[0]] = n
+            setPolicy(patch)
+          },
+        }))),
+      h('div', { className: 'sseye-dim', style: { marginTop: '4px' } },
+        '截断只作用于之后的捕获内容；调小缓冲条数会立即裁掉最旧的记录')),
     h('textarea', {
       className: 'sseye-textarea', rows: 2,
       placeholder: '脱敏正则，每行一条；命中替换为 ***（失焦生效）',

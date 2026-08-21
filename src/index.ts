@@ -16,14 +16,31 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 
-const CAPACITY = 100
-const MAX_STRING = 200000
 const ROUTE_PREFIX = '/__sseye'
 
 interface Policy {
   sources: Record<'agent' | 'compaction' | 'title' | 'other', boolean>
   fields: Record<'system' | 'messages' | 'tools' | 'reasoning' | 'text' | 'toolArgs', boolean>
   redactions: string[]
+  /** Capacity controls — runtime-tunable via POST /__sseye/policy. */
+  limits: {
+    /** Ring-buffer size (records). Shrinking trims the oldest immediately. */
+    capacity: number
+    /** Per-string truncation cap for request-side fields (chars). */
+    maxString: number
+    /** Per-block accumulation cap for response text/reasoning/tool-args (chars). */
+    maxBlock: number
+  }
+}
+
+/**
+ * Guardrails for the tunables. Defaults are generous by design — truncation is
+ * a safety valve, not the default experience.
+ */
+const LIMIT_BOUNDS: Record<keyof Policy['limits'], [number, number]> = {
+  capacity: [1, 5000],
+  maxString: [1000, 20000000],
+  maxBlock: [1000, 50000000],
 }
 
 interface CapturedBlock {
@@ -69,6 +86,7 @@ const policy: Policy = {
   sources: { agent: true, compaction: true, title: true, other: true },
   fields: { system: true, messages: true, tools: true, reasoning: true, text: true, toolArgs: true },
   redactions: [],
+  limits: { capacity: 100, maxString: 200000, maxBlock: 1000000 },
 }
 
 /** Canonical pi-ai Api ids → friendly labels. */
@@ -154,8 +172,9 @@ function sourceOf(options: any): string {
 
 function capString(s: unknown): unknown {
   if (typeof s !== 'string') return s
-  if (s.length <= MAX_STRING) return s
-  return s.slice(0, MAX_STRING) + '\n…[truncated, total ' + s.length + ' chars]'
+  const max = policy.limits.maxString
+  if (s.length <= max) return s
+  return s.slice(0, max) + '\n…[truncated, total ' + s.length + ' chars]'
 }
 
 function redact(s: unknown): unknown {
@@ -215,6 +234,18 @@ function ensureBlock(rec: Record_, index: number, kind: string): CapturedBlock {
   return b
 }
 
+/**
+ * Append a stream delta to a response block under policy.limits.maxBlock.
+ * b.chars keeps the true stream total even when the text itself is truncated.
+ */
+function appendBlock(b: CapturedBlock, field: 'text' | 'reasoning' | 'args', t: string): void {
+  const max = policy.limits.maxBlock
+  const cur = b[field]
+  if (cur.length >= max) return
+  if (cur.length + t.length <= max) { b[field] = cur + t; return }
+  b[field] = (cur + t).slice(0, max) + '\n…[truncated, stream continued past ' + max + ' chars]'
+}
+
 function observeChunk(rec: Record_, chunk: any): void {
   try {
     if (!chunk || typeof chunk !== 'object') return
@@ -228,19 +259,19 @@ function observeChunk(rec: Record_, chunk: any): void {
       const b = ensureBlock(rec, chunk.index, 'text')
       const t = typeof chunk.text === 'string' ? chunk.text : ''
       b.chars += t.length
-      if (policy.fields.text) b.text += redact(t) as string
+      if (policy.fields.text) appendBlock(b, 'text', redact(t) as string)
     } else if (chunk.type === 'reasoning-delta') {
       const b = ensureBlock(rec, chunk.index, 'reasoning')
       const t = typeof chunk.text === 'string' ? chunk.text : ''
       b.chars += t.length
-      if (policy.fields.reasoning) b.reasoning += redact(t) as string
+      if (policy.fields.reasoning) appendBlock(b, 'reasoning', redact(t) as string)
     } else if (chunk.type === 'tool-call-delta') {
       const b = ensureBlock(rec, chunk.index, 'tool-call')
       if (typeof chunk.name === 'string') b.toolName = chunk.name
       if (chunk.id !== undefined) b.toolId = String(chunk.id)
       const t = typeof chunk.argumentsDelta === 'string' ? chunk.argumentsDelta : ''
       b.chars += t.length
-      if (policy.fields.toolArgs) b.args += redact(t) as string
+      if (policy.fields.toolArgs) appendBlock(b, 'args', redact(t) as string)
     } else if (chunk.type === 'block-end') {
       const b = rec.blocks.get(chunk.index)
       if (b) b.endedAt = now
@@ -254,13 +285,18 @@ function observeChunk(rec: Record_, chunk: any): void {
   } catch {}
 }
 
-function push(rec: Record_): void {
-  records.push(rec)
-  byId.set(rec.id, rec)
-  while (records.length > CAPACITY) {
+/** Ring-buffer discipline: never hold more than policy.limits.capacity records. */
+function trimBuffer(): void {
+  while (records.length > policy.limits.capacity) {
     const old = records.shift()!
     byId.delete(old.id)
   }
+}
+
+function push(rec: Record_): void {
+  records.push(rec)
+  byId.set(rec.id, rec)
+  trimBuffer()
 }
 
 function previewOf(rec: Record_): string {
@@ -453,6 +489,17 @@ function applyPolicyPatch(args: any): Policy {
     if (Array.isArray(args.redactions)) {
       policy.redactions = args.redactions.filter((s: unknown) => typeof s === 'string' && s.length > 0)
     }
+    if (args.limits && typeof args.limits === 'object') {
+      for (const k of Object.keys(LIMIT_BOUNDS) as (keyof Policy['limits'])[]) {
+        const v = (args.limits as Record<string, unknown>)[k]
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          const [lo, hi] = LIMIT_BOUNDS[k]
+          policy.limits[k] = Math.min(hi, Math.max(lo, Math.round(v)))
+        }
+      }
+      // A smaller ring takes effect now, not on the next push.
+      trimBuffer()
+    }
   }
   return policy
 }
@@ -607,5 +654,5 @@ export function apply(ctx: Context): void {
     web.effect(() => webServer.register({ kind: 'prefix', path: ROUTE_PREFIX, handler: handleHttp }), 'sseye: http routes')
   })
 
-  console.log('dsh-sseye: llm/stream capture active, capacity ' + CAPACITY)
+  console.log('dsh-sseye: llm/stream capture active, capacity ' + policy.limits.capacity)
 }

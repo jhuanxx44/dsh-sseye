@@ -28,9 +28,15 @@ function fakeCtx() {
   return { ctx, listeners, routes }
 }
 
-function callRoute(handler, method, url) {
+function callRoute(handler, method, url, body) {
   return new Promise((resolve) => {
-    const req = { method, url, on() {}, destroy() {} }
+    const listeners = {}
+    const req = {
+      method,
+      url,
+      on(ev, fn) { listeners[ev] = fn },
+      destroy() {},
+    }
     const res = {
       status: 0,
       headers: {},
@@ -42,6 +48,15 @@ function callRoute(handler, method, url) {
       () => resolve(res),
       () => resolve(res),
     )
+    if (body !== undefined) {
+      // The handler attaches its listeners synchronously before awaiting the
+      // body, so firing data/end on the next microtask is safe.
+      const buf = Buffer.from(JSON.stringify(body))
+      queueMicrotask(() => {
+        if (listeners.data) listeners.data(buf)
+        if (listeners.end) listeners.end()
+      })
+    }
   })
 }
 
@@ -54,10 +69,17 @@ async function boot() {
   assert.equal(routes.length, 1, 'one prefix route registered')
   assert.equal(routes[0].path, '/__sseye')
   const handler = routes[0].handler
-  // The buffer is module-level state shared across tests in this process —
-  // reset it through the real /clear route.
+  // The buffer and the policy are module-level state shared across tests in
+  // this process — reset both through the real routes.
   const cleared = await callRoute(handler, 'POST', '/__sseye/clear')
   assert.equal(cleared.status, 200)
+  const reset = await callRoute(handler, 'POST', '/__sseye/policy', {
+    sources: { agent: true, compaction: true, title: true, other: true },
+    fields: { system: true, messages: true, tools: true, reasoning: true, text: true, toolArgs: true },
+    redactions: [],
+    limits: { capacity: 100, maxString: 200000, maxBlock: 1000000 },
+  })
+  assert.equal(reset.status, 200)
   return { stream: listeners['llm/stream'], handler }
 }
 
@@ -150,4 +172,49 @@ test('/export rejects missing ids and unsanitized names', async () => {
   const nasty = await callRoute(handler, 'GET', '/__sseye/export?ids=' + items[0].id + '&name=' + encodeURIComponent('../../etc/passwd; rm -rf'))
   assert.equal(nasty.status, 200)
   assert.match(nasty.headers['content-disposition'], /^attachment; filename="sseye-[A-Za-z0-9_-]+\.json"$/)
+})
+
+test('limits are runtime-tunable via /policy and clamped to bounds', async () => {
+  const { stream, handler } = await boot()
+
+  // Defaults are visible in the policy echo.
+  const p0 = JSON.parse((await callRoute(handler, 'GET', '/__sseye/policy')).body)
+  assert.deepEqual(p0.limits, { capacity: 100, maxString: 200000, maxBlock: 1000000 })
+
+  // Tighten both truncation limits to their lower bound (1000).
+  const patched = JSON.parse((await callRoute(handler, 'POST', '/__sseye/policy', { limits: { maxString: 1000, maxBlock: 1000 } })).body)
+  assert.equal(patched.limits.maxString, 1000)
+  assert.equal(patched.limits.maxBlock, 1000)
+
+  const long = 'x'.repeat(1500)
+  const tapped = stream(
+    { provider: 'p', model: 'm', system: long, messages: [{ role: 'user', content: 'hi' }] },
+    async function* () {
+      yield { type: 'text-delta', index: 0, text: long }
+      yield { type: 'finish', reason: 'stop' }
+    },
+  )
+  for await (const _ of tapped) {}
+
+  const items = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  const d = JSON.parse((await callRoute(handler, 'GET', '/__sseye/get?id=' + items[0].id)).body)
+  assert.match(d.request.system, /truncated, total 1500/)
+  assert.ok(d.request.system.length < 1100, 'request field capped at maxString + marker')
+  assert.match(d.blocks[0].text, /truncated, stream continued past 1000/)
+  assert.equal(d.blocks[0].chars, 1500, 'chars keeps the true stream total')
+
+  // Shrinking capacity trims the ring immediately, not on the next push.
+  await captureOne(stream)
+  await captureOne(stream)
+  assert.equal(JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body).length, 3)
+  await callRoute(handler, 'POST', '/__sseye/policy', { limits: { capacity: 2 } })
+  const after = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  assert.equal(after.length, 2)
+  assert.ok(!after.some((i) => i.id === items[0].id), 'oldest record evicted immediately')
+
+  // Out-of-bounds and non-numeric values are clamped / ignored.
+  const clamped = JSON.parse((await callRoute(handler, 'POST', '/__sseye/policy', { limits: { capacity: 0, maxString: 999999999, maxBlock: 'x' } })).body)
+  assert.equal(clamped.limits.capacity, 1)
+  assert.equal(clamped.limits.maxString, 20000000)
+  assert.equal(clamped.limits.maxBlock, 1000, 'non-numeric ignored, previous value kept')
 })
