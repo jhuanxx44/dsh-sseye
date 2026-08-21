@@ -9,8 +9,8 @@
 It is the harness-internal sibling of [SSEye](#relationship-to-sseye) — same diagnostic philosophy, different observation layer.
 
 <p>
-  <img src="assets/screenshot-panel.png" width="560" alt="SSEye panel: turn-grouped call list with an expanded inline detail — provider/model hero, TTFT/duration/usage stats, cache-hit bar, prompt and message sections">
-  <img src="assets/screenshot-policy.png" width="360" alt="SSEye capture policy panel: source and field toggles, capacity limits, redaction regexes">
+  <img src="assets/panel-detail.png" width="560" alt="SSEye panel: turn-grouped call list with an expanded inline detail — provider/model hero, TTFT/duration/usage stats, cache-hit bar, prompt and message sections">
+  <img src="assets/policy.png" width="360" alt="SSEye capture policy panel: source and field toggles, capacity limits, redaction regexes">
 </p>
 
 ## Installation

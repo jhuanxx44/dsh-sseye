@@ -9,8 +9,8 @@
 它是 [SSEye](#与-sseye-的关系) 在 harness 内部的兄弟项目——同一套诊断哲学，换个观察层。
 
 <p>
-  <img src="assets/screenshot-panel.png" width="560" alt="SSEye 面板：按轮次分组的调用列表，行内展开详情——provider/model、TTFT/时长/用量统计、cache 命中条、Prompt 与消息分区">
-  <img src="assets/screenshot-policy.png" width="360" alt="SSEye 抓取策略面板：来源与字段开关、容量上限、脱敏正则">
+  <img src="assets/panel-detail.png" width="560" alt="SSEye 面板：按轮次分组的调用列表，行内展开详情——provider/model、TTFT/时长/用量统计、cache 命中条、Prompt 与消息分区">
+  <img src="assets/policy.png" width="360" alt="SSEye 抓取策略面板：来源与字段开关、容量上限、脱敏正则">
 </p>
 
 ## 安装
