@@ -471,7 +471,7 @@ function MessageView(props: { m: any; isNew?: boolean }) {
 }
 
 const BLOCK_KIND_COLOR: Record<string, string> = {
-  text: 'var(--dsw-alias-brand-primary,#4f8cff)',
+  text: 'var(--dsw-alias-button-info-fill,#4f8cff)',
   reasoning: '#a371f7',
   'tool-call': 'var(--dsw-alias-state-warn-primary,#f0b429)',
 }
