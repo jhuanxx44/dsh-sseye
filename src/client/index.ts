@@ -2,8 +2,9 @@
  * dsh-sseye — Client half (web composition module).
  *
  * DevTools-style viewer for the Host half's captures: a trigger button in
- * `conversation.session.header.utilities` plus a right-side overlay panel in
- * `shell.overlay`. Talks to the Host over same-origin HTTP routes under
+ * `conversation.session.header.utilities` plus the shell's right `details`
+ * column (grid sibling of the conversation with a shell-owned draggable
+ * divider). Talks to the Host over same-origin HTTP routes under
  * `/__sseye` (composition plugins have no package-private RPC).
  *
  * The bundle contract (single CJS file, ModuleLoader wrapper, platform
@@ -36,14 +37,21 @@ interface SlotsService {
   register(options: Record<string, unknown>, render: (props: any) => React.ReactNode): unknown
 }
 
+interface LayoutService {
+  openDetails(): void
+  closeDetails(): void
+}
+
 interface ClientContext {
   get(name: string): unknown
   effect(fn: () => unknown, label?: string): unknown
 }
 
+/** Assigned in apply(); module-level because the components are module-level. */
+let layout: LayoutService | undefined
+
 const store = {
-  open: false,
-  items: [] as any[],
+  open: false,  items: [] as any[],
   selectedId: null as string | null,
   detail: null as any,
   policy: null as any,
@@ -552,14 +560,12 @@ function Panel() {
     return () => { store.listeners.delete(f) }
   }, [])
   React.useEffect(() => {
-    if (!store.open) return undefined
     let dead = false
     const tick = () => { if (!dead) pull() }
     tick()
     const timer = setInterval(tick, 1500)
     return () => { dead = true; clearInterval(timer) }
-  }, [store.open])
-  if (!store.open) return null
+  }, [])
   const all = store.items
   const items = (store.onlyThisSession && store.sessionId) ? all.filter((it) => it.sessionId === store.sessionId) : all
   const groups = groupItems(items)
@@ -591,7 +597,7 @@ function Panel() {
       }, '清空'),
       h('button', {
         className: 'sseye-btn',
-        onClick: () => { store.open = false; store.emit() },
+        onClick: () => { store.open = false; store.emit(); if (layout) layout.closeDetails() },
       }, '关闭')),
     store.showPolicy ? h(PolicyPanel) : null,
     h('div', { className: 'sseye-body' },
@@ -610,6 +616,7 @@ export const inject = ['slots']
 export function apply(ctx: ClientContext): void {
   const slots = ctx.get('slots') as SlotsService | undefined
   if (slots === undefined) return
+  layout = ctx.get('layout') as LayoutService | undefined
 
   // Composition clients have no `styles` builtin: own the <style> tag on the fiber.
   ctx.effect(() => {
@@ -628,13 +635,23 @@ export function apply(ctx: ClientContext): void {
         className: 'sseye-hbtn',
         'data-active': store.open ? '' : undefined,
         title: 'SSEye · LLM 调试台',
-        onClick: () => { store.open = !store.open; store.emit() },
+        onClick: () => {
+          store.open = !store.open
+          store.emit()
+          if (layout) { if (store.open) layout.openDetails(); else layout.closeDetails() }
+        },
       }, h(TriggerIcon, { size: 15 }), 'SSEye')
     },
   ))
 
-  slots.inject('shell.overlay', () => slots.register(
-    { name: 'shell.overlay', id: 'sseye-panel', label: 'SSEye' },
-    () => h(Panel),
+  // Dock into the shell's right details column (grid sibling of the
+  // conversation, draggable divider owned by the shell) instead of a
+  // floating overlay. Trade-off: this shadows the shipped tool-details panel.
+  slots.inject('details', () => slots.register(
+    { name: 'details' },
+    (props: any) => {
+      if (props && props.sessionId) store.sessionId = String(props.sessionId)
+      return h(Panel)
+    },
   ))
 }
