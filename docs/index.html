@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="dsh-sseye：DeepSeek Harness 里的 LLM 调试台。捕获每一次模型调用的完整内容。">
+<title>dsh-sseye — DeepSeek Harness 里的 LLM 调试台</title>
+<style>
+  body {
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+    max-width: 42em;
+    line-height: 1.75;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  h1 { font-size: 1.6em; line-height: 1.35; margin: 0 0 0.5em; }
+  h2 { font-size: 1.25em; margin-top: 2.2em; }
+  h3 { font-size: 1.05em; margin: 1.6em 0 0.4em; }
+  pre {
+    padding: 0.75em 1em;
+    border: 1px solid;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 0.9em;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace; }
+  footer { margin-top: 3em; padding-top: 1em; border-top: 1px solid; font-size: 0.9em; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>dsh-sseye：DeepSeek Harness 里的 LLM 调试台</h1>
+
+<p><strong>dsh-sseye</strong> 是 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a>（DSH）的一个插件：把每一次模型调用的完整内容捕获下来，给你看。</p>
+
+<p>这个页面不讲别的，就讲三件事：我发现的问题，我怎么解决的，以及解决之后顺带得到的价值。</p>
+
+<h2>一、问题：模型调用是个黑盒</h2>
+
+<p>在 DSH 里写 agent，迟早会遇到这些时刻：</p>
+
+<ul>
+  <li>任务跑到第十轮，回答质量突然垮掉。上下文里到底多了什么？</li>
+  <li>一次工具调用的参数错了。是模型的问题，还是我给它的工具 schema 写得有歧义？</li>
+  <li>上下文越滚越大，token 花得越来越快。膨胀是从哪条消息、哪次工具返回开始的？</li>
+  <li>compaction 之后，模型实际看到的上下文长什么样？</li>
+</ul>
+
+<p>这些问题有一个共同点：你必须看到模型<strong>真正收到的东西</strong>——完整的 system prompt、全部历史消息、工具 schema、采样参数——才有得谈。</p>
+
+<h3>DSH 自带的「轨迹」，以及它不够用的地方</h3>
+
+<p>DSH 其实自带了一个「轨迹」视图：会话里的一个标签页，把这个会话的持久化事件排成一张账本——用户消息、上下文注入、工具调用、每一轮的边界。点开每行能看内容、用量、时延；system prompt 和工具目录变了还给 diff。作为「这个会话发生过什么」的记录，它做得不错。</p>
+
+<p>但拿它调试模型调用，有几个具体的坑：</p>
+
+<ul>
+  <li><strong>它给的是账本，不是请求。</strong>每次调用在账本上是一个小圆点，点开能看到 provider/model、system prompt 和工具目录，但「这一次调用发出的完整 messages 数组」没有任何界面直接给你——你得沿着账本自己往上拼。compaction 之后更麻烦：账本把压缩前的行留着当历史，第 N 次调用时上下文里到底还剩什么，得自己推。</li>
+  <li><strong>失败的调用只剩一行错误。</strong>轨迹的数据来自会话持久事件。一次调用中途挂掉，落进日志的只有错误字符串和重试序号；模型死前已经吐出来的那半截内容，界面上没有。而排查断流、超时、半截输出，恰恰最需要看那半截。</li>
+  <li><strong>会话标题的调用不存在。</strong>自动起标题也是一次真实的模型调用，也花 token、也会出错，但它不产生会话事件，轨迹里完全没有它。</li>
+  <li><strong>一个会话一堵墙。</strong>轨迹是单个会话的视图。subagent 的调用发生在别的会话里，从主会话的轨迹上一点看不见；想看只能挨个切会话，没有跨会话的总账。</li>
+  <li><strong>没有 wire 层的事实。</strong>只有 provider 和 model 名字。走的是哪个协议（openai-completions 还是 anthropic-messages）、打的哪个端点，都没有——而这些是判断「是不是打到预期路由上」的依据。</li>
+  <li><strong>不能复制，不能导出。</strong>整个视图没有一个复制按钮，也没有导出入口。想把一条记录贴进 issue 或存档，只能在界面上用鼠标手选。</li>
+</ul>
+
+<p>一句话总结：轨迹回答「这个会话发生过什么」，但调试需要的是「第 N 次调用到底收到了什么、返回了什么」。这两件事差着一层。</p>
+
+<p>在轨迹之外，要看原始请求，老路子要么是抓网络包：配代理、装 CA 证书，而且网络层看到的是字节流，不是调用——哪个请求属于哪个 turn、哪一步，全靠人对时间戳；要么在代码里到处加日志：侵入、不全、删起来麻烦。</p>
+
+<h2>二、解决：在 harness 自己的调用管线上，开一个只读的口子</h2>
+
+<p>DSH 的进程里，每一次 LLM 调用都会流经一个原生事件：<code>llm/stream</code>。它拿到的参数就是完整的 <code>GenerateOptions</code>（system、messages、tools、采样参数），它放行的就是完整的响应流——每一个 chunk。这是 harness 内部的调用管线，比网络层更靠里，信息也更全。</p>
+
+<p>dsh-sseye 做的事，就是在这个点上装一个严格只读的捕获器：</p>
+
+<ul>
+  <li><strong>全量。</strong>请求加响应流整段记下，外加 TTFT、总时长、usage（含 cache 命中）、finish reason、错误。上面说的轨迹的坑，逐条对上：每次调用独立成一条记录，messages 数组直接可看；失败的调用连同已流出的半截内容一起记下；会话标题、compaction、subagent 的调用一律照抓，还带会话和来源归因。</li>
+  <li><strong>只读。</strong>流经捕获点的 options 本来就是深冻结的，插件只看不改；响应 chunk 原样放行——顺序、背压、取消、异常，一个都不动。这不是偷懒，是纪律：调试器如果会改动被调试的东西，它自己就成了变量。</li>
+  <li><strong>自带 agent 语义。</strong>用共享的 <code>AbortSignal</code> 把每次调用和 agent 循环对上号，每条记录自带 turn/step 归因和来源分类（主循环 / compaction / 会话标题 / 其他）。这恰恰是网络抓包给不了的。</li>
+  <li><strong>只住内存。</strong>记录放在有界的环形缓冲里（默认 100 条，上限 5000），进程退出即焚毁。导出只有你手动触发才有。正则脱敏在进缓冲之前完成。API key 根本到不了这一层——它们封装在 adapter 内部。</li>
+  <li><strong>就地展示。</strong>一个 DevTools 风格的面板，停靠在 harness 自带的 Web 界面右侧。不另开窗口，不另起进程。</li>
+</ul>
+
+<p>使用成本是一条安装命令，零代理、零证书、零额外配置：</p>
+
+<pre><code>dsh plugin --profile web add dsh-sseye</code></pre>
+
+<p>（也可以从源码装：<code>dsh plugin --profile web add github:jhuanxx44/dsh-sseye</code>。装完重启 harness，会话头部会多出一个 SSEye 按钮。）</p>
+
+<h2>三、顺带的价值</h2>
+
+<p>把「看全每一次调用」这件事做扎实之后，一些原来很费劲的调试动作变得便宜了：</p>
+
+<ul>
+  <li><strong>上下文 diff。</strong>同一会话里，每次调用的 messages 自动和上一次比：共享的前缀折叠成一行，新增的消息高亮直出。「上下文到底长了什么」从考古题变成一次点击。这是我做这个工具最直接的动机，也是我自己用得最多的功能。</li>
+  <li><strong>Wire JSON 重建。</strong>把结构化的捕获记录按 DeepSeek adapter 的序列化规则还原成真正发到线上的 JSON：工具结果展开成独立的 <code>role:"tool"</code> 消息，推理过程回放成 <code>reasoning_content</code>。不碰网络，就能核对「供应商实际收到了什么」。</li>
+  <li><strong>真实协议与端点。</strong>openai-completions、anthropic-messages、google-generative-ai……从 provider 配置解析出来，标在每条记录上，不用猜。</li>
+  <li><strong>按轮聚合。</strong>同一个 turn 的调用归成一组，组头直接汇总：几个调用、进出多少 token、总时长。跑 subagent 扇出的任务时，一眼看清一次指令炸出了多少次模型调用、钱花在哪一步。</li>
+  <li><strong>策略运行时可调。</strong>来源开关、字段开关、脱敏正则、缓冲大小、截断长度，都在面板里改，不用重启。默认全量；关掉的字段会在记录里如实标注「按策略未捕获」，绝不无声留白。</li>
+  <li><strong>JSON 导出。</strong>单条或整组，导出成带版本号的自描述 JSON，贴 issue、存档都方便。</li>
+</ul>
+
+<p>还有一层：这个只读捕获点是后续功能的地基。克隆一条历史请求、改参数、重新发出、并排比对响应（Replay &amp; Mutate）已经在计划里——捕获本来就是全量且不动原流，所以重放不需要再动管线，只是把一条记录变成一次新请求。</p>
+
+<h2>四、边界，明说</h2>
+
+<ul>
+  <li>它不替代轨迹。轨迹是持久化的会话历史，重启之后还在；sseye 是进程内的全量现场，默认零持久化，退出即焚。回看上周的会话，用轨迹；弄清刚才某次调用到底发生了什么，用 sseye。两件事都成立，谁也不抢谁的活。</li>
+  <li>它只看 DSH 进程内的调用。想看整台机器上所有应用的流量，那是网络层代理的活——这个项目有个兄弟叫 SSEye，干的就是那个。两者互补，不是替代。</li>
+  <li>不做 token/成本看板，不做遥测导出。那和「默认零持久化」的姿态冲突。</li>
+  <li>不做请求改写。流永远原样放行；要做实验，走将来的「克隆重发」。</li>
+</ul>
+
+<footer>
+<p><a href="https://github.com/jhuanxx44/dsh-sseye">代码仓库</a> ｜ <a href="https://github.com/jhuanxx44/dsh-sseye/blob/main/README.zh-CN.md">中文 README</a> ｜ <a href="https://github.com/jhuanxx44/dsh-sseye/blob/main/README.md">English README</a> ｜ MIT 协议</p>
+</footer>
+
+</main>
+</body>
+</html>
