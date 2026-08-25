@@ -133,6 +133,12 @@ function DownloadIcon() {
     h('path', { d: 'M4 19h16' }))
 }
 
+function CloseIcon() {
+  return h('svg', { viewBox: '0 0 24 24', width: 13, height: 13, fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+    h('path', { d: 'M18 6L6 18' }),
+    h('path', { d: 'M6 6l12 12' }))
+}
+
 function CopyWrap(props: { text: string; children?: React.ReactNode }) {
   const [copied, setCopied] = React.useState(false)
   return h('div', { className: 'sseye-copywrap' },
@@ -744,46 +750,56 @@ function PolicyPanel() {
     ['maxString', t('policy.lim.maxString'), 1000, 20000000, 1000],
     ['maxBlock', t('policy.lim.maxBlock'), 1000, 50000000, 10000],
   ]
+  // The labels become block headings, so their inline trailing colon goes.
+  const groupLabel = (s: string) => s.replace(/[:：]\s*$/, '')
   return h('div', { className: 'sseye-policy' },
-    h('div', null, t('policy.sources'), srcLabels.map((kv) =>
-      h('label', { key: kv[0] }, h('input', {
-        type: 'checkbox', checked: !!(p.sources && p.sources[kv[0]]),
-        onChange: (e: any) => {
-          const patch = { sources: {} as Record<string, boolean> }
-          patch.sources[kv[0]] = e.target.checked
-          if (store.policy && store.policy.sources) store.policy.sources[kv[0]] = e.target.checked
-          setPolicy(patch)
-        },
-      }), kv[1]))),
-    h('div', { style: { marginTop: '6px' } }, t('policy.fields'), fldLabels.map((kv) =>
-      h('label', { key: kv[0] }, h('input', {
-        type: 'checkbox', checked: !!(p.fields && p.fields[kv[0]]),
-        onChange: (e: any) => {
-          const patch = { fields: {} as Record<string, boolean> }
-          patch.fields[kv[0]] = e.target.checked
-          if (store.policy && store.policy.fields) store.policy.fields[kv[0]] = e.target.checked
-          setPolicy(patch)
-        },
-      }), kv[1]))),
-    h('div', { style: { marginTop: '6px' } }, t('policy.capacity'), limLabels.map((it) =>
-      h('label', { key: it[0], title: t('policy.limRange', { min: it[2], max: it[3] }) },
-        h('span', null, it[1]),
-        h('input', {
-          type: 'number',
-          className: 'sseye-num',
-          min: it[2], max: it[3], step: it[4],
-          // Remount when the echoed value changes so clamping becomes visible.
-          key: it[0] + '-' + (lim[it[0]] || 0),
-          defaultValue: lim[it[0]],
-          onBlur: (e: any) => {
-            const n = Math.round(Number(e.target.value))
-            if (!Number.isFinite(n) || n === lim[it[0]]) return
-            const patch = { limits: {} as Record<string, number> }
-            patch.limits[it[0]] = n
+    h('div', { className: 'sseye-pgroup' },
+      h('div', { className: 'sseye-plabel' }, groupLabel(t('policy.sources'))),
+      h('div', { className: 'sseye-pitems' }, srcLabels.map((kv) =>
+        h('label', { key: kv[0] }, h('input', {
+          type: 'checkbox', checked: !!(p.sources && p.sources[kv[0]]),
+          onChange: (e: any) => {
+            const patch = { sources: {} as Record<string, boolean> }
+            patch.sources[kv[0]] = e.target.checked
+            if (store.policy && store.policy.sources) store.policy.sources[kv[0]] = e.target.checked
             setPolicy(patch)
           },
-        }))),
-      h('div', { className: 'sseye-dim', style: { marginTop: '4px' } },
+        }), kv[1])))),
+    h('div', { className: 'sseye-pgroup' },
+      h('div', { className: 'sseye-plabel' }, groupLabel(t('policy.fields'))),
+      h('div', { className: 'sseye-pitems' }, fldLabels.map((kv) =>
+        h('label', { key: kv[0] }, h('input', {
+          type: 'checkbox', checked: !!(p.fields && p.fields[kv[0]]),
+          onChange: (e: any) => {
+            const patch = { fields: {} as Record<string, boolean> }
+            patch.fields[kv[0]] = e.target.checked
+            if (store.policy && store.policy.fields) store.policy.fields[kv[0]] = e.target.checked
+            setPolicy(patch)
+          },
+        }), kv[1])))),
+    h('div', { className: 'sseye-pgroup' },
+      h('div', { className: 'sseye-plabel' }, groupLabel(t('policy.capacity'))),
+      // One label per row (name left, field right) instead of an inline run:
+      // three number inputs never fit one line in a 360px column.
+      h('div', { className: 'sseye-caps' }, limLabels.map((it) =>
+        h('label', { key: it[0], title: t('policy.limRange', { min: it[2], max: it[3] }) },
+          h('span', null, it[1]),
+          h('input', {
+            type: 'number',
+            className: 'sseye-num',
+            min: it[2], max: it[3], step: it[4],
+            // Remount when the echoed value changes so clamping becomes visible.
+            key: it[0] + '-' + (lim[it[0]] || 0),
+            defaultValue: lim[it[0]],
+            onBlur: (e: any) => {
+              const n = Math.round(Number(e.target.value))
+              if (!Number.isFinite(n) || n === lim[it[0]]) return
+              const patch = { limits: {} as Record<string, number> }
+              patch.limits[it[0]] = n
+              setPolicy(patch)
+            },
+          })))),
+      h('div', { className: 'sseye-note', style: { marginTop: '5px' } },
         t('policy.limitsNote'))),
     h('textarea', {
       className: 'sseye-textarea', rows: 2,
@@ -854,35 +870,43 @@ function Panel() {
   const items = (store.onlyThisSession && store.sessionId) ? all.filter((it) => it.sessionId === store.sessionId) : all
   const groups = groupItems(items)
   return h('div', { className: 'sseye-panel', ref: rootRef },
+    // Two-row header: identity + count on top (close as an icon, so it never
+    // competes for text width), actions below in a wrapping group. A single
+    // flex row made every label a wrap candidate in a 360px column.
     h('div', { className: 'sseye-head' },
-      h('span', { className: 'sseye-title' }, 'SSEye'),
-      h('span', { className: 'sseye-count' }, t('panel.turns', { n: groups.length }) + ' · ' + t('group.calls', { n: items.length })),
-      h('button', {
-        className: 'sseye-btn',
-        'data-active': store.onlyThisSession ? '' : undefined,
-        onClick: () => { store.onlyThisSession = !store.onlyThisSession; store.emit() },
-      }, store.onlyThisSession ? t('panel.thisSession') : t('panel.all')),
-      h('span', { className: 'sseye-spacer' }),
-      h('button', {
-        className: 'sseye-btn',
-        onClick: () => {
-          store.showPolicy = !store.showPolicy
-          if (store.showPolicy && !store.policy) {
-            api('/policy').then((p) => { if (p) store.policy = p; store.emit() }).catch(logErr('get-policy'))
-          }
-          store.emit()
-        },
-      }, store.showPolicy ? t('panel.hidePolicy') : t('panel.showPolicy')),
-      h('button', {
-        className: 'sseye-btn',
-        onClick: () => {
-          api('/clear', {}).then(() => { store.items = []; store.selectedId = null; store.detail = null; store.emit() }).catch(logErr('clear'))
-        },
-      }, t('panel.clear')),
-      h('button', {
-        className: 'sseye-btn',
-        onClick: () => { store.open = false; store.emit(); if (layout) layout.closeDetails() },
-      }, t('panel.close'))),
+      h('div', { className: 'sseye-head-main' },
+        h('span', { className: 'sseye-title' }, 'SSEye'),
+        h('span', { className: 'sseye-count' }, t('panel.turns', { n: groups.length }) + ' · ' + t('group.calls', { n: items.length })),
+        h('span', { className: 'sseye-spacer' }),
+        h('button', {
+          className: 'sseye-xbtn',
+          title: t('panel.close'),
+          'aria-label': t('panel.close'),
+          onClick: () => { store.open = false; store.emit(); if (layout) layout.closeDetails() },
+        }, h(CloseIcon))),
+      h('div', { className: 'sseye-head-tools' },
+        h('button', {
+          className: 'sseye-btn',
+          'data-active': store.onlyThisSession ? '' : undefined,
+          onClick: () => { store.onlyThisSession = !store.onlyThisSession; store.emit() },
+        }, store.onlyThisSession ? t('panel.thisSession') : t('panel.all')),
+        h('button', {
+          className: 'sseye-btn',
+          'data-active': store.showPolicy ? '' : undefined,
+          onClick: () => {
+            store.showPolicy = !store.showPolicy
+            if (store.showPolicy && !store.policy) {
+              api('/policy').then((p) => { if (p) store.policy = p; store.emit() }).catch(logErr('get-policy'))
+            }
+            store.emit()
+          },
+        }, store.showPolicy ? t('panel.hidePolicy') : t('panel.showPolicy')),
+        h('button', {
+          className: 'sseye-btn',
+          onClick: () => {
+            api('/clear', {}).then(() => { store.items = []; store.selectedId = null; store.detail = null; store.emit() }).catch(logErr('clear'))
+          },
+        }, t('panel.clear')))),
     store.showPolicy ? h(PolicyPanel) : null,
     // Single scroll flow: the list column is the only scrolling region; step
     // details expand inline under their row (see stepRows/InlineDetail).
