@@ -421,17 +421,80 @@ function groupItems(items: any[]): Group[] {
     if (it.startedAt > g.latest) g.latest = it.startedAt
   }
   groups.sort((a, b) => b.latest - a.latest)
-  for (const g of groups) g.rows.sort((a, b) => a.startedAt - b.startedAt)
+  for (const g of groups) g.rows = orderHops(g.rows)
   return groups
+}
+
+/**
+ * Chronological order, except that an upstream hop follows its parent instead
+ * of taking its own slot in the sequence.
+ *
+ * A wrapping provider (modlens' `modlens-<upstream>` vision wrap, a router, a
+ * fallback chain) re-enters `llm.stream()`, so one logical step legitimately
+ * captures several records. The host tags each hop with parentId; nesting them
+ * here is what keeps "4 calls" reading as 4 steps rather than 8.
+ */
+function orderHops(rows: any[]): any[] {
+  const sorted = rows.slice().sort((a, b) => a.startedAt - b.startedAt)
+  const kids = new Map<string, any[]>()
+  const present = new Set<string>()
+  for (const r of sorted) present.add(r.id)
+  for (const r of sorted) {
+    // A hop whose parent was evicted from the ring buffer has no anchor left,
+    // so it renders as its own top-level row rather than disappearing.
+    if (!r.parentId || !present.has(r.parentId)) continue
+    const list = kids.get(r.parentId)
+    if (list) list.push(r)
+    else kids.set(r.parentId, [r])
+  }
+  const out: any[] = []
+  const seen = new Set<string>()
+  const walk = (r: any, depth: number) => {
+    if (seen.has(r.id)) return // cycle guard: never trust ids into infinite recursion
+    seen.add(r.id)
+    r.hopDepth = depth
+    out.push(r)
+    const list = kids.get(r.id)
+    if (list) for (const k of list) walk(k, depth + 1)
+  }
+  for (const r of sorted) {
+    if (r.parentId && present.has(r.parentId)) continue
+    walk(r, 0)
+  }
+  // Anything left over (a hop cycle) still has to reach the list.
+  for (const r of sorted) if (!seen.has(r.id)) walk(r, 0)
+  return out
+}
+
+/**
+ * Real steps among rows: hops render under their parent and are not steps.
+ *
+ * Counts by hopDepth rather than parentId, which orderHops assigns to every row
+ * it emits. That keeps the number honest for an orphan hop too: one whose
+ * parent was evicted from the ring buffer renders at depth 0, so it counts as
+ * the step it visually is.
+ */
+function stepCount(rows: any[]): number {
+  let n = 0
+  for (const r of rows) if (!r.hopDepth) n++
+  return n
 }
 
 function StepRow(props: { it: any; onSelect: () => void }) {
   const it = props.it
-  const cls = store.selectedId === it.id ? 'sseye-row sel' : 'sseye-row'
+  const depth = typeof it.hopDepth === 'number' ? it.hopDepth : 0
+  let cls = store.selectedId === it.id ? 'sseye-row sel' : 'sseye-row'
+  if (depth > 0) cls += ' hop'
   const kids: React.ReactNode[] = [
     dot(it.status),
-    h('span', { key: 's', className: 'sseye-stepchip' }, it.step !== undefined && it.step !== null ? 'S' + it.step : (it.source || '')),
+    // A hop shares its parent's step number, so repeating "S3" on both rows
+    // would read as two separate steps. The arrow marks the upstream leg and
+    // the chip names the wrapping route it came through.
+    depth > 0
+      ? h('span', { key: 's', className: 'sseye-stepchip sseye-hopchip', title: t('row.hopVia', { via: String(it.viaProvider || '') }) }, '↳')
+      : h('span', { key: 's', className: 'sseye-stepchip' }, it.step !== undefined && it.step !== null ? 'S' + it.step : (it.source || '')),
   ]
+  if (depth > 0 && it.provider) kids.push(h('span', { key: 'pv', className: 'sseye-chip' }, String(it.provider)))
   // Display priority: the content preview wins over the right-side metrics.
   // styles.ts carries container queries that progressively hide usage → TTFT →
   // time as the list column narrows; duration stays visible the longest.
@@ -493,6 +556,10 @@ function TurnGroup(props: { g: Group }) {
     ? t('group.turn', { n: String(g.turn) })
     : (g.source === 'compaction' ? t('group.compaction') : g.source === 'title' ? t('group.sessionTitle') : t('group.other'))
   const prev = g.rows.length && g.rows[0].preview ? g.rows[0].preview : ''
+  // Hops are legs of their parent step, so the headline counts steps and
+  // reports the extra upstream legs separately.
+  const steps = stepCount(g.rows)
+  const hops = g.rows.length - steps
   return h('div', { className: 'sseye-tgroup' },
     h('div', {
       className: 'sseye-tgh',
@@ -500,7 +567,9 @@ function TurnGroup(props: { g: Group }) {
     },
       h(Chevron, { open: isOpen }),
       h('span', { className: 'sseye-tgh-title' }, title),
-      h('span', { className: 'sseye-chip' }, t('group.calls', { n: g.rows.length }) + (running ? t('group.running', { n: running }) : '')),
+      h('span', { className: 'sseye-chip' }, t('group.calls', { n: steps })
+        + (hops ? t('group.hops', { n: hops }) : '')
+        + (running ? t('group.running', { n: running }) : '')),
       h('span', { className: 'sseye-tgh-prev' }, prev),
       h('span', { className: 'sseye-tgh-agg' }, 'in:' + inTok + ' out:' + outTok + ' · ' + fmtDur(dur)),
       h('button', {
@@ -615,6 +684,12 @@ function Hero(props: { d: any }) {
       d.protocol ? h('span', { className: 'sseye-chip sseye-chip-accent', title: d.api ? d.api + (d.protocolGuessed ? t('hero.apiGuessed') : t('hero.apiConfigured')) : undefined }, (d.protocolGuessed ? '~' : '') + d.protocol) : null,
       d.source ? h('span', { className: 'sseye-chip' }, d.source) : null,
       d.turn !== undefined && d.turn !== null ? h('span', { className: 'sseye-chip' }, 'T' + d.turn + ' · S' + d.step) : null,
+      // An upstream hop names the wrapping route it was re-dispatched from, so
+      // the two near-identical records in one step stay tellable apart.
+      d.parentId ? h('span', {
+        className: 'sseye-chip sseye-chip-hop',
+        title: t('row.hopVia', { via: String(d.viaProvider || '') }),
+      }, '↳ ' + t('hero.hopVia', { via: String(d.viaProvider || '') })) : null,
       h('span', { className: 'sseye-spacer' }),
       h('button', {
         className: 'sseye-btn',
@@ -869,6 +944,10 @@ function Panel() {
   const all = store.items
   const items = (store.onlyThisSession && store.sessionId) ? all.filter((it) => it.sessionId === store.sessionId) : all
   const groups = groupItems(items)
+  // Count steps, not records: the group headlines already read as steps, so a
+  // header counting raw captures would contradict the sum of its own groups.
+  let steps = 0
+  for (const g of groups) steps += stepCount(g.rows)
   return h('div', { className: 'sseye-panel', ref: rootRef },
     // Two-row header: identity + count on top (close as an icon, so it never
     // competes for text width), actions below in a wrapping group. A single
@@ -876,7 +955,9 @@ function Panel() {
     h('div', { className: 'sseye-head' },
       h('div', { className: 'sseye-head-main' },
         h('span', { className: 'sseye-title' }, 'SSEye'),
-        h('span', { className: 'sseye-count' }, t('panel.turns', { n: groups.length }) + ' · ' + t('group.calls', { n: items.length })),
+        h('span', { className: 'sseye-count' }, t('panel.turns', { n: groups.length })
+          + ' · ' + t('group.calls', { n: steps })
+          + (items.length - steps ? t('group.hops', { n: items.length - steps }) : '')),
         h('span', { className: 'sseye-spacer' }),
         h('button', {
           className: 'sseye-xbtn',

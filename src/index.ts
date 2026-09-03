@@ -97,6 +97,10 @@ interface Record_ {
   sessionId?: string
   turn?: number
   step?: number
+  /** Set when this call is an upstream hop of another captured call (see liveBySignal). */
+  parentId?: string
+  /** The wrapping provider this hop was dispatched from — the parent's route. */
+  viaProvider?: string
   api?: string
   apiGuessed?: boolean
   baseURL?: string
@@ -111,6 +115,56 @@ const records: Record_[] = []
 const byId = new Map<string, Record_>()
 const coordBySignal = new Map<AbortSignal, { turn?: number; step?: number }>()
 let seq = 0
+
+/**
+ * Open captures per AbortSignal, innermost last.
+ *
+ * A provider adapter may legitimately re-enter `llm.stream()` to reach an
+ * upstream route — @liustack/modlens wraps text-only models as
+ * `modlens-<upstream>` and re-dispatches to `<upstream>` after converting
+ * images to evidence text; routers and fallback chains do the same. Every hop
+ * crosses the `llm/stream` waterfall again, so one logical call legitimately
+ * produces several records.
+ *
+ * Both hops share the caller's AbortSignal and the outer record is still
+ * `running` when the inner one starts, which is what identifies the nesting.
+ * Capture policy stays non-destructive (AGENTS.md invariant 3): the hop is
+ * recorded in full and merely labelled, never dropped.
+ */
+const liveBySignal = new Map<AbortSignal, Record_[]>()
+
+/** Depth guard: a legitimate wrap chain is 1–2 deep, never dozens. */
+const MAX_HOP_DEPTH = 8
+
+function pushLive(sig: AbortSignal | undefined, rec: Record_): void {
+  if (!sig) return
+  // An abandoned generator never reaches its `finally`, so the stack it left
+  // behind would leak. Both bounds keep that failure mode finite.
+  if (liveBySignal.size > 200) liveBySignal.clear()
+  const stack = liveBySignal.get(sig)
+  if (!stack) { liveBySignal.set(sig, [rec]); return }
+  if (stack.length < MAX_HOP_DEPTH) stack.push(rec)
+}
+
+function popLive(sig: AbortSignal | undefined, rec: Record_): void {
+  if (!sig) return
+  const stack = liveBySignal.get(sig)
+  if (!stack) return
+  const i = stack.lastIndexOf(rec)
+  if (i >= 0) stack.splice(i, 1)
+  if (stack.length === 0) liveBySignal.delete(sig)
+}
+
+/** The innermost still-running capture on this signal, if any. */
+function parentOf(sig: AbortSignal | undefined): Record_ | undefined {
+  if (!sig) return undefined
+  const stack = liveBySignal.get(sig)
+  if (!stack) return undefined
+  for (let i = stack.length - 1; i >= 0; i--) {
+    if (stack[i].status === 'running') return stack[i]
+  }
+  return undefined
+}
 
 const policy: Policy = {
   sources: { agent: true, compaction: true, title: true, other: true },
@@ -393,6 +447,8 @@ function summary(rec: Record_): Record<string, unknown> {
   if (rec.sessionId !== undefined) out.sessionId = rec.sessionId
   if (rec.turn !== undefined) out.turn = rec.turn
   if (rec.step !== undefined) out.step = rec.step
+  if (rec.parentId !== undefined) out.parentId = rec.parentId
+  if (rec.viaProvider !== undefined) out.viaProvider = rec.viaProvider
   if (rec.usage !== undefined) out.usage = rec.usage
   if (rec.finishReason !== undefined) out.finishReason = rec.finishReason
   if (rec.error !== undefined) out.error = rec.error
@@ -728,13 +784,27 @@ export function apply(ctx: Context, config?: SseyeConfig): void {
     if (!policy.sources[source as keyof Policy['sources']]) return next()
 
     const id = 'c' + (++seq)
+
+    // A still-running capture on this signal means an adapter re-entered
+    // llm.stream() to reach an upstream route: this call is that hop.
+    let parent: Record_ | undefined
+    try { parent = parentOf(options.signal) } catch {}
+
     let coord: { turn?: number; step?: number } | undefined
-    try {
-      if (options.signal) {
-        coord = coordBySignal.get(options.signal)
-        coordBySignal.delete(options.signal)
-      }
-    } catch {}
+    if (parent) {
+      // The outer hop already consumed the signal→coordinate mapping, so a
+      // second lookup finds nothing. Inherit instead: every hop of one logical
+      // call belongs to the same turn/step, which is what keeps it grouped with
+      // its parent rather than stranded under "other calls".
+      coord = { turn: parent.turn, step: parent.step }
+    } else {
+      try {
+        if (options.signal) {
+          coord = coordBySignal.get(options.signal)
+          coordBySignal.delete(options.signal)
+        }
+      } catch {}
+    }
 
     const rec: Record_ = {
       id,
@@ -748,7 +818,12 @@ export function apply(ctx: Context, config?: SseyeConfig): void {
       chunkCount: 0,
     }
     if (options.sessionId !== undefined && options.sessionId !== null) rec.sessionId = String(options.sessionId)
-    if (coord) { rec.turn = coord.turn; rec.step = coord.step }
+    if (coord && (coord.turn !== undefined || coord.step !== undefined)) { rec.turn = coord.turn; rec.step = coord.step }
+    if (parent) {
+      rec.parentId = parent.id
+      const via = parent.request.provider
+      if (typeof via === 'string') rec.viaProvider = via
+    }
     try {
       const route = resolveRoute(svcs, options.provider)
       if (route.api !== undefined) {
@@ -758,6 +833,11 @@ export function apply(ctx: Context, config?: SseyeConfig): void {
       if (route.baseURL !== undefined) rec.baseURL = route.baseURL
     } catch {}
 
+    // Register before next(): a wrapping adapter re-enters llm.stream() while
+    // the outer stream is being iterated, so this record must already be the
+    // open frame on this signal when that nested listener looks for its parent.
+    try { pushLive(options.signal, rec) } catch {}
+
     let inner: AsyncIterable<unknown>
     try {
       inner = next()
@@ -765,6 +845,7 @@ export function apply(ctx: Context, config?: SseyeConfig): void {
       rec.status = 'error'
       rec.error = e instanceof Error ? e.message : String(e)
       rec.endedAt = Date.now()
+      try { popLive(options.signal, rec) } catch {}
       push(rec)
       throw e
     }
@@ -787,6 +868,9 @@ export function apply(ctx: Context, config?: SseyeConfig): void {
         throw e
       } finally {
         if (!rec.endedAt) rec.endedAt = Date.now()
+        // Runs on normal completion, on throw, and on early consumer return —
+        // the frame must close even when the stream is abandoned mid-flight.
+        try { popLive(options.signal, rec) } catch {}
       }
     })()
     return tap

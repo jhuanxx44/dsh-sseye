@@ -343,6 +343,83 @@ test('redaction patterns are precompiled per policy change and apply at capture 
   assert.match(items2[0].preview, /again sk-keep123 now/, 'patterns cleared rebuild the compiled set')
 })
 
+test('a provider wrapper re-entering llm.stream is captured as an upstream hop', async () => {
+  const { stream, handler } = await boot()
+
+  // What @liustack/modlens does: the `modlens-<upstream>` adapter re-enters
+  // llm.stream() with provider `<upstream>`, so one logical call crosses the
+  // waterfall twice on the SAME AbortSignal. Both hops must be captured (the
+  // inner one carries the rewritten upstream request), and the inner one must
+  // be labelled rather than looking like a second, unrelated step.
+  const signal = new AbortController().signal
+  const base = {
+    model: 'deepseek-chat',
+    messages: [{ role: 'user', content: 'hi' }],
+    sessionId: 'sess-hop',
+    signal,
+  }
+
+  const outer = stream({ ...base, provider: 'modlens-beats' }, () => {
+    // The wrapper's own adapter dispatch: a nested waterfall pass.
+    const innerTap = stream({ ...base, provider: 'beats' }, async function* () {
+      yield { type: 'text-delta', index: 0, text: 'ok' }
+      yield { type: 'finish', reason: 'stop' }
+    })
+    return innerTap
+  })
+  for await (const _ of outer) {}
+
+  const items = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  assert.equal(items.length, 2, 'both hops are captured; nothing is dropped at capture time')
+
+  const wrap = items.find((i) => i.provider === 'modlens-beats')
+  const up = items.find((i) => i.provider === 'beats')
+  assert.ok(wrap && up)
+
+  // The outer hop is the real step and owns no parent.
+  assert.equal(wrap.parentId, undefined, 'the outermost call is not a hop')
+  // The inner one points at it and names the route it came through.
+  assert.equal(up.parentId, wrap.id, 'the re-entered call is tagged with its parent')
+  assert.equal(up.viaProvider, 'modlens-beats', 'the hop records the wrapping provider')
+
+  // Frames must not leak once the streams settle.
+  const after = stream({ ...base, provider: 'beats' }, async function* () {
+    yield { type: 'finish', reason: 'stop' }
+  })
+  for await (const _ of after) {}
+  const items2 = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  assert.equal(items2[0].parentId, undefined, 'a later call on a settled signal is not treated as a hop')
+})
+
+test('an upstream hop inherits its parent turn/step instead of losing them', async () => {
+  const { ctx, listeners, routes } = fakeCtx()
+  sseye.apply(ctx)
+  const handler = routes[0].handler
+  await callRoute(handler, 'POST', '/__sseye/clear')
+
+  const signal = new AbortController().signal
+  // The agent loop announces turn/step for this signal exactly once.
+  listeners['agent/request']({ turn: 5, step: 3, signal }, () => undefined)
+
+  const base = { model: 'deepseek-chat', messages: [], sessionId: 'sess-coord', signal }
+  const outer = listeners['llm/stream']({ ...base, provider: 'modlens-beats' }, () =>
+    listeners['llm/stream']({ ...base, provider: 'beats' }, async function* () {
+      yield { type: 'finish', reason: 'stop' }
+    }))
+  for await (const _ of outer) {}
+
+  const items = JSON.parse((await callRoute(handler, 'GET', '/__sseye/list')).body)
+  const wrap = items.find((i) => i.provider === 'modlens-beats')
+  const up = items.find((i) => i.provider === 'beats')
+
+  assert.equal(wrap.turn, 5)
+  assert.equal(wrap.step, 3)
+  // Before the fix the outer hop consumed the signal→coordinate mapping and
+  // the inner hop landed in "other calls" with no turn at all.
+  assert.equal(up.turn, 5, 'the hop inherits its parent turn')
+  assert.equal(up.step, 3, 'the hop inherits its parent step')
+})
+
 test('wire reconstruction expands tool-result user messages into role:"tool"', async () => {
   const { stream, handler } = await boot()
   const tapped = stream(
