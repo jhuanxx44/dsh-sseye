@@ -2,10 +2,13 @@
  * dsh-sseye — Client half (web composition module).
  *
  * DevTools-style viewer for the Host half's captures: a trigger button in
- * `conversation.session.header.utilities` plus the shell's right `details`
- * column (grid sibling of the conversation with a shell-owned draggable
- * divider). Talks to the Host over same-origin HTTP routes under
- * `/__sseye` (composition plugins have no package-private RPC).
+ * `conversation.session.header.utilities` plus a tab in the shell's right
+ * column. Since DSH 0.1.5-rc that column is a tabbed dock owned by
+ * `@deepseek-ai/dsh-client-ui-sidebar-right`: we register a page type in its
+ * registry and a body at `sidebar.right.pane.tab` keyed by our registration id,
+ * then reveal it with `ctx.get('sidebarRight').openTab(kind)`. Talks to the Host
+ * over same-origin HTTP routes under `/__sseye` (composition plugins have no
+ * package-private RPC).
  *
  * The bundle contract (single CJS file, ModuleLoader wrapper, platform
  * externals via the injected require) is owned by tsdown.config.ts.
@@ -34,22 +37,57 @@ async function api(path: string, body?: unknown): Promise<any> {
 /* ------------------------------------------------------------------ */
 
 interface SlotsService {
-  inject(name: string, cb: () => void): void
+  inject(name: string, cb: () => void): unknown
   register(options: Record<string, unknown>, render: (props: any) => React.ReactNode): unknown
 }
 
-interface LayoutService {
-  openDetails(): void
-  closeDetails(): void
+/**
+ * The tab-type registry (`ctx.get('sidebarRightTabs')`). A page type registers
+ * no address globs: it is opened by `kind` alone, which is what `openTab` names.
+ */
+interface TabRegistryService {
+  register(definition: {
+    id: string
+    kind: string
+    priority?: 'extension' | 'builtin' | 'fallback'
+    title: (address: string) => string
+    guide?: readonly { order: number; title: () => string; description?: () => string }[]
+  }): () => void
+}
+
+/** Tab record as the controller reports it (dockkit's TabRecord, narrowed). */
+interface TabRecord {
+  id: string
+  kind: string
+}
+
+/**
+ * The right column's navigation face (`ctx.get('sidebarRight')`). Since DSH
+ * 0.1.5-rc the shell owns the column as a tabbed dock: `openTab` reveals it and
+ * `toggleExpanded` collapses the rail. The old `openDetails`/`closeDetails`
+ * pair and the `details` slot no longer exist.
+ */
+interface SidebarRightService {
+  openTab(kind: string, options?: { revealIfOpened?: boolean }): void
+  close(tabId: string): void
+  active(): TabRecord | undefined
+  isExpanded(): boolean
+  toggleExpanded(): void
 }
 
 interface ClientContext {
   get(name: string): unknown
   effect(fn: () => unknown, label?: string): unknown
+  inject(deps: string[], cb: (ctx: ClientContext) => void): unknown
 }
 
+/** Our tab type in the right column's registry — the kind `openTab` names. */
+const TAB_KIND = 'sseye'
+/** The registration id: the key the body slot dispatches on. */
+const TAB_ID = 'dsh-sseye'
+
 /** Assigned in apply(); module-level because the components are module-level. */
-let layout: LayoutService | undefined
+let sidebarRight: SidebarRightService | undefined
 
 const store = {
   open: false,  items: [] as any[],
@@ -887,7 +925,7 @@ function PolicyPanel() {
     }))
 }
 
-function Panel() {
+function Panel(props: any) {
   const [, force] = React.useState(0)
   const rootRef = React.useRef<HTMLDivElement | null>(null)
   React.useEffect(() => {
@@ -895,22 +933,47 @@ function Panel() {
     store.listeners.add(f)
     return () => { store.listeners.delete(f) }
   }, [])
+  // The shell's tab framework hands every body its own live record: `visible`
+  // is the truth about whether the column is showing us, and `actions.close()`
+  // is the only correct way to close (the dock, not the width, owns the tab).
+  const hasTabInfo = typeof props?.useTabInfo === 'function'
+  const info = hasTabInfo ? props.useTabInfo() : undefined
+  const tab = info && info.tab
+  const tabVisible = tab ? tab.visible === true : false
+  const tabVisibleRef = React.useRef(tabVisible)
+  tabVisibleRef.current = tabVisible
+  const wakeRef = React.useRef<(() => void) | null>(null)
   React.useEffect(() => {
-    // The details column is never unmounted by the shell — closing it only
-    // collapses it to width 0 — so mount/unmount cannot gate polling. Measure
-    // the real rendered width instead: 0 (or a hidden tab) means fully paused,
-    // which is what keeps a closed panel at zero requests instead of a
-    // forever 1.5s heartbeat. A single self-scheduling loop also means a slow
-    // poll can never overlap the next one (setInterval did).
+    if (!tab) return
+    if (store.open !== tabVisible) { store.open = tabVisible; store.emit() }
+  }, [tabVisible])
+  // Collapsing the column keeps the body mounted (the shell only hides it), so
+  // an unmount means the tab itself went away — closed from the strip, or the
+  // session switched out from under it. The trigger must not stay lit for a tab
+  // nobody is drawing.
+  React.useEffect(() => () => {
+    if (store.open) { store.open = false; store.emit() }
+  }, [])
+  React.useEffect(() => {
+    // The column is never unmounted on collapse — the shell only sets
+    // `visibility: hidden` and moves it off-frame, so the rendered width stays
+    // at its layout value and cannot gate polling. `useTabInfo().tab.visible` is
+    // the authoritative signal; the width measurement is the fallback for a
+    // shell that reports no tab info (and a wake trigger either way): paused
+    // means zero requests, not a forever 1.5s heartbeat. A single
+    // self-scheduling loop also means a slow poll can never overlap the next
+    // one (setInterval did).
     let dead = false
     let width: number = typeof ResizeObserver === 'undefined' ? Infinity : 0
     let wakeUp: (() => void) | null = null
-    const visible = () => width > 1 && !(typeof document !== 'undefined' && document.hidden)
+    const visible = () => !(typeof document !== 'undefined' && document.hidden)
+      && (hasTabInfo ? tabVisibleRef.current : width > 1)
     const sleep = (ms: number) => new Promise<void>((resolve) => {
       const t = setTimeout(() => { wakeUp = null; resolve() }, ms)
       wakeUp = () => { clearTimeout(t); wakeUp = null; resolve() }
     })
     const wake = () => { if (wakeUp) wakeUp() }
+    wakeRef.current = wake
     const loop = async () => {
       while (!dead) {
         if (!visible()) { await sleep(500); continue }
@@ -941,6 +1004,12 @@ function Panel() {
       document.removeEventListener('visibilitychange', onVis)
     }
   }, [])
+  // Resuming from the rail must refresh at once, not up to 500ms later: the
+  // paused branch sleeps in 500ms steps, so nudge it the moment the shell says
+  // we are on screen again. Declared after the loop effect so `wakeRef` is set.
+  React.useEffect(() => {
+    if (tabVisible && wakeRef.current) wakeRef.current()
+  }, [tabVisible])
   const all = store.items
   const items = (store.onlyThisSession && store.sessionId) ? all.filter((it) => it.sessionId === store.sessionId) : all
   const groups = groupItems(items)
@@ -963,7 +1032,7 @@ function Panel() {
           className: 'sseye-xbtn',
           title: t('panel.close'),
           'aria-label': t('panel.close'),
-          onClick: () => { store.open = false; store.emit(); if (layout) layout.closeDetails() },
+          onClick: () => { closeTab(tab) },
         }, h(CloseIcon))),
       h('div', { className: 'sseye-head-tools' },
         h('button', {
@@ -998,6 +1067,42 @@ function Panel() {
           : groups.map((g) => h(TurnGroup, { key: g.key, g })))))
 }
 
+/**
+ * Reveal our tab, or collapse the column when it is already the one on screen.
+ * `openTab` is idempotent per kind, so a second call reveals the existing tab
+ * rather than stacking duplicates.
+ */
+function openOrToggle(): void {
+  const api = sidebarRight
+  if (api === undefined) return
+  const active = api.active()
+  if (active !== undefined && active.kind === TAB_KIND && api.isExpanded()) {
+    store.open = false
+    store.emit()
+    api.toggleExpanded()
+    return
+  }
+  store.open = true
+  store.emit()
+  api.openTab(TAB_KIND, { revealIfOpened: true })
+}
+
+/**
+ * Close our tab. The body's own record carries `actions.close()`, which targets
+ * the session that tab lives in; without a record (a stale render) fall back to
+ * the controller's active tab.
+ */
+function closeTab(record: any): void {
+  store.open = false
+  store.emit()
+  if (record && record.actions && typeof record.actions.close === 'function') { record.actions.close(); return }
+  const api = sidebarRight
+  if (api !== undefined) {
+    const active = api.active()
+    if (active !== undefined && active.kind === TAB_KIND) { api.close(active.id); return }
+  }
+}
+
 /** The header trigger: a store subscriber so a late locale switch re-renders
  *  its title (the shell never re-invokes the slot render on its own). */
 function TriggerButton() {
@@ -1011,11 +1116,7 @@ function TriggerButton() {
     className: 'sseye-hbtn',
     'data-active': store.open ? '' : undefined,
     title: t('trigger.title'),
-    onClick: () => {
-      store.open = !store.open
-      store.emit()
-      if (layout) { if (store.open) layout.openDetails(); else layout.closeDetails() }
-    },
+    onClick: openOrToggle,
   }, h(TriggerIcon, { size: 15 }), 'SSEye')
 }
 
@@ -1027,7 +1128,6 @@ export const inject = ['slots']
 export function apply(ctx: ClientContext): void {
   const slots = ctx.get('slots') as SlotsService | undefined
   if (slots === undefined) return
-  layout = ctx.get('layout') as LayoutService | undefined
 
   // The host's plugin config decides the UI locale; English is already in
   // effect, so a missing route (old host, non-web profile) just keeps it.
@@ -1055,23 +1155,47 @@ export function apply(ctx: ClientContext): void {
     },
   ))
 
-  // Dock into the shell's right details column (grid sibling of the
-  // conversation, draggable divider owned by the shell) instead of a
-  // floating overlay. Trade-off: this shadows the shipped tool-details panel.
+  // The right column. Since DSH 0.1.5-rc the shell owns it as a tabbed dock
+  // (`@deepseek-ai/dsh-client-ui-sidebar-right`), so there is no `details` slot
+  // to occupy any more and no `openDetails`/`closeDetails` to call: a plugin
+  // contributes a *tab type* and the shell draws the strip, the divider, the
+  // collapse rail, and the float/dock controls around it.
   //
-  // `details` is a single slot and dsh-client-ui-conversation already occupies
-  // it with its DetailsPanel at the default priority 0. Shadowing is a
-  // priority contest, not a land grab: entries on one cell coexist at
-  // *distinct* priorities sorted ascending, and the lowest live entry renders.
-  // Registering at 0 collides with the occupant and throws
-  // ("single slot already has a registration at priority 0"), which fails the
-  // whole plugin load. -1 sits below the shipped panel, so this renders and
-  // the core entry stays live underneath as the fallback.
-  slots.inject('details', () => slots.register(
-    { name: 'details', priority: -1 },
+  // Three registrations, all keyed by `TAB_ID`:
+  //   1. the type itself, in the `sidebarRightTabs` registry (a page type — no
+  //      address globs, opened by kind through `ctx.sidebarRight.openTab`);
+  //   2. the body, at the keyed slot `sidebar.right.pane.tab`;
+  //   3. the chip title rides the type's own `title()` (always "SSEye", so it
+  //      needs no `sidebar.right.pane.tab.title` registration to stay live).
+  // The body slot render receives `useTabInfo` (the framework's live record
+  // hook) plus our `sessionId`, which is what Panel reads for visibility and
+  // close. Both services are injected rather than required in `inject`, so a
+  // stock shell without the dock still keeps the capture list working.
+  ctx.inject(['sidebarRightTabs', 'sidebarRight'], (injected) => {
+    const tabs = injected.get('sidebarRightTabs') as TabRegistryService | undefined
+    const right = injected.get('sidebarRight') as SidebarRightService | undefined
+    if (tabs === undefined || right === undefined) return
+    sidebarRight = right
+    injected.effect(() => {
+      const off = tabs.register({
+        id: TAB_ID,
+        kind: TAB_KIND,
+        priority: 'extension',
+        title: () => 'SSEye',
+        guide: [{ order: 60, title: () => 'SSEye', description: () => t('trigger.title') }],
+      })
+      return () => {
+        if (sidebarRight === right) sidebarRight = undefined
+        off()
+      }
+    }, 'dsh-sseye: right-column tab type')
+  })
+
+  slots.inject('sidebar.right.pane.tab', () => slots.register(
+    { name: 'sidebar.right.pane.tab', key: TAB_ID },
     (props: any) => {
       if (props && props.sessionId) store.sessionId = String(props.sessionId)
-      return h(Panel)
+      return h(Panel, props)
     },
   ))
 }
