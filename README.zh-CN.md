@@ -70,7 +70,7 @@ dsh plugin --profile web remove dsh-sseye
 - 本会话 / 全部过滤；一键清空。
 - **中英双语界面**：默认英文，`config.locale: zh-CN` 切中文（见上文配置）。
 
-面板停靠在 shell 右侧 details 列，接管该列（原工具详情面板在卸载后恢复）。[docs/harness-patches.md](docs/harness-patches.md) 有加宽该列的本地补丁。
+面板是 shell 右侧栏里的一个标签页。DSH 0.1.5-rc 起右栏是标签式 dock（`dsh-client-ui-sidebar-right`），所以 SSEye 注册一个 tab 类型 + 一个 body，再用 `ctx.sidebarRight.openTab('sseye')` 打开；标签条、分隔条、收起导轨、浮动/停靠控件都由 shell 绘制。原版默认开在视口 45%（拖拽上限 70%）；这一列宽度属于 shell、且所有占用者共用，所以本仓用一行 harness 补丁把「默认值」收窄——见 [docs/harness-patches.md](docs/harness-patches.md) §1。
 
 ### 抓取策略 —— 运行时可调
 
@@ -111,7 +111,7 @@ pnpm test         # node --test
 ```
 ├── src/
 │   ├── index.ts          # Host 半：llm/stream 捕获、环形缓冲、/__sseye/* HTTP 路由
-│   └── client/           # Client 半：会话头部触发按钮 + details 列面板（React）
+│   └── client/           # Client 半：会话头部触发按钮 + 右栏标签页 body（React）
 ├── lib/                  # 已提交的构建产物（git 安装时由 `prepare` 重建）
 ├── docs/                 # 平台踩坑笔记 + 本地 harness 补丁
 ├── cordis.patch.yml      # bundle patch：向 profile 插入 `sseye` 插件行

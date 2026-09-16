@@ -24,6 +24,20 @@ Positioning: **看见每一次调用的全部内容，改得了参数当场重�
 - `StreamChunk`: `block-start | text-delta | reasoning-delta | tool-call-delta | block-end | usage | finish`.
 - Correlation: `agent/request` carries `{ agent, turn, step, signal }`; correlate with `llm/stream` by shared `AbortSignal` + agent identity + sessionId. Replayed calls lack the agent-loop marker — tag them as manual replays in the capture list.
 
+### Client shell — right column tab contract (verified 2026-09-16 against DSH 0.1.5-rc.1)
+
+**Breaking vs. earlier versions**: the shell's right column was rebuilt from a single `details` slot into a tabbed dock. `ctx.layout.openDetails()` / `closeDetails()` and the `details` slot **no longer exist**; a plugin still registering into `details` loads cleanly and then renders nothing — the silent-failure mode that broke v0.4.2 on upgrade.
+
+- Owner: `@deepseek-ai/dsh-client-ui-sidebar-right`. It provides `sidebarRightTabs` (tab-type registry) and `sidebarRight` (navigation). `ctx.layout` retains `toggleSidebar`, `openRightbar(track, fullscreen)`, `closeRightbar()`, `selectPanel()`, `beginNavigation()`.
+- A panel is three registrations, all keyed by one registration `id`:
+  1. **type** — `ctx.get('sidebarRightTabs').register({ id, kind, priority: 'extension', title: (address) => string, patterns?, canOpen?, guide? })`, returning an idempotent disposer;
+  2. **body** — slot `sidebar.right.pane.tab` with `{ name, key: id }`; its props carry `sessionId` and the framework hook `useTabInfo` (the flattened `hooks.tabInfo`);
+  3. **optional live chip title** — `sidebar.right.pane.tab.title`, same `key`; without it the chip shows the registry's `title()` captured at open time.
+- Opening: `ctx.get('sidebarRight').openTab(kind, { revealIfOpened: true })` — idempotent per kind. Closing goes through the record's own `useTabInfo().tab.actions.close()` (session-correct), not the controller. `toggleExpanded()` collapses to the rail without closing.
+- A hidden column keeps the tab body **mounted** (the shell only sets `visibility: hidden` and moves it off-frame). Read `useTabInfo().tab.visible` for "am I showing" — `getBoundingClientRect().width` stays non-zero while collapsed, and an unmount means the tab itself is gone.
+- Obtain both services via `ctx.inject(['sidebarRightTabs', 'sidebarRight'], …)` rather than the module-level `inject` list, so a shell without the dock still loads the capture list.
+- Geometry is viewport-relative upstream (`RIGHTBAR_DEFAULT_RATIO` 0.45 open, `RIGHTBAR_MAX_RATIO` 0.7 drag). There is **one** width for the whole column and no per-tab width in the API: `openTab` / `openRightbar` take none, and the public `ctx.layout` face exposes no width setter or reader, so a plugin cannot seed a narrower width without stomping the user's own drag. Narrowing the *default* is therefore a harness patch (`docs/harness-patches.md` §1, 0.45 → 0.28 on this machine), and `setRightbar` exists only as a private bound action.
+
 ## Non-goals
 
 Token/cost dashboards and telemetry export (OTel/Langfuse/Prometheus — covered by other plugins, and conflict with the privacy posture); wire-level packet capture; request/response in-place rewriting (invariant 2).

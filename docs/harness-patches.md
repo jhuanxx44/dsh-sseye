@@ -1,26 +1,46 @@
 # Harness local patches
 
-Optional, out-of-tree tweaks to the installed DeepSeek Harness. **Nothing here is required** — SSEye is built to work on a stock install. Each patch is **overwritten by `dsh` upgrades**, so treat one as a standing cost: re-apply after every upgrade, or skip it.
+Optional, out-of-tree tweaks to the installed DeepSeek Harness. **Nothing here is required to run SSEye** — it works on a stock install. Each patch is **overwritten by `dsh` upgrades**, so treat one as a standing cost: re-apply after every upgrade, or skip it.
 
-## 1. Wider details column (dsh-client-ui-layout) — optional comfort
+## 1. Narrower right column (dsh-client-ui-layout) — ACTIVE on this machine
 
-**Status**: not applied by default, and not needed. Since v0.4.1 the panel is laid out to hold up at the stock `360px`: the header splits into an identity row plus a wrapping action row (close is an icon, not a text button), help text wraps instead of being clipped, and the capture-policy groups stack with one capacity field per row. Take this patch only if you personally prefer a roomier column.
+**Status**: applied. Stock DSH opens the right column at **45% of the frame**, which is 864px on a 1920-wide display — the panel is designed to hold up around 360px, so this is a taste patch, not a correctness one.
 
-**Why it can't live in this repo**: SSEye only *occupies* the shell's right `details` column; it does not own the width. The `details` slot exposes no width prop and no width registration option, and the public `ctx.layout` face is just `openDetails()` / `closeDetails()` / `toggleSidebar()` — the width setter stays internal to the shell's layout store. So the shell hardcodes the open default at `360px` and clamps dragging to `300–520px`, and the only lever is editing the installed bundle below.
+**What the column is**: one geometry, shared by every occupant. `ctx.sidebarRight` has no per-tab width and `openTab` / `openRightbar` take no width parameter, so the only lever on the *default* is the shell's own constant. The user's own drag writes a px preference that survives resize and close (in-memory; a page reload forgets it) — `rightbar ??=` only consults the ratio while that preference is still null.
 
 **File**: `<dsh-install>/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js`
-(`<dsh-install>` = the global `@deepseek-ai/dsh` root, e.g. `~/.nvm/versions/node/v22.22.0/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js`)
+(`<dsh-install>` = the global `@deepseek-ai/dsh` root, e.g. `~/.nvm/versions/node/v22.22.0/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/`)
 
-**Edits** (3 exact replacements):
+**Edit** (1 exact replacement, line 17 — the constant is declared once and read once, at the `rightbar ??=` seed):
 
 | before | after |
 |---|---|
-| `clampWidth(details, 300, 520)` (in `computeColumns`) | `clampWidth(details, 300, 800)` |
-| `d.details = clampWidth(px, 300, 520)` (in `setDetails`) | `d.details = clampWidth(px, 300, 800)` |
-| `if (d.details === 0) d.details = 360` (in `openDetails`) | `if (d.details === 0) d.details = 520` |
+| `const RIGHTBAR_DEFAULT_RATIO = .45;` | `const RIGHTBAR_DEFAULT_RATIO = .28;` |
 
-**Apply**: edit + reload the browser page (the client bundle is served from this file at page load; no harness restart needed).
+```bash
+F=<dsh-install>/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
+perl -pi -e 's/const RIGHTBAR_DEFAULT_RATIO = \.45;/const RIGHTBAR_DEFAULT_RATIO = .28;/' "$F"
+```
 
-**Revert**: apply the table right-to-left — `800` back to `520` in both clamps, and the `openDetails` default back to `360`. Reinstalling the package works too; the file is a build artifact, so a fresh install is always pristine.
+**Effect**: open width = `max(300, round(viewport × 0.28))` — 358px at 1280, 423px at 1512, 538px at 1920. `RIGHTBAR_MAX_RATIO = .7` (drag ceiling) is left alone, and the 300px floor plus the "center keeps ≥400px" rule are untouched, so a small window degrades exactly as before.
 
-**Upstream candidate**: a width setter on `ctx.layout` (or a persisted layout store), plus a raised or viewport-relative drag clamp. That would retire this patch entirely.
+**Apply**: edit + reload the browser page. The host re-hashes the affected client batch at boot or on watch, so no harness restart is needed (verified: batch rev `4d5af5232242` → `e612be5b6da5` after the edit, page reload only).
+
+**Revert**: change `.28` back to `.45`, or restore the pristine artifact:
+
+```bash
+cp local/harness-patches/dsh-client-ui-layout.client.js.orig \
+   <dsh-install>/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
+```
+
+`local/` is gitignored, so that backup is a machine-local convenience, not part of the repo. Reinstalling the package also restores it — the file is a build artifact.
+
+**Blast radius**: every rightbar occupant, not just SSEye — the guide tab, file previews, and other plugins' tabs all open at the new ratio.
+
+**Upstream candidate**: a width parameter on `ctx.sidebarRight.openTab(kind, { width })` or `ctx.layout.openRightbar(track, fullscreen, width)` — with a width *read* on the public face so a plugin can respect a user's existing preference instead of stomping it. Failing that, a layout setting persisted in `settings.yaml` would retire this patch for good.
+
+## Retired — wider right column (`clampWidth(details, …)`, pre-0.1.5)
+
+Kept so nobody re-applies it blindly. The old patch rewrote three clamps in the same bundle to widen a hardcoded `360px` column (`300–520` → `300–800`).
+
+DSH 0.1.5-rc.1 made the geometry viewport-relative, so the widening side is no longer needed — and **the old three replacements no longer exist**: `details`, `setDetails`, and `openDetails` are gone from the bundle, and there is no `clampWidth(details, …)` call left to edit. Patch 1 above edits a different, still-present constant.

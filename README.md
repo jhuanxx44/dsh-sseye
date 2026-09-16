@@ -73,7 +73,7 @@ Chinese; everything else (or no config) is English.
 - 本会话 / 全部 session filter; one-click clear.
 - **i18n**: English UI by default; Chinese via `config.locale` (see above).
 
-The panel docks into the shell's right details column, taking it over from the shipped tool-details panel (which returns if you uninstall). [docs/harness-patches.md](docs/harness-patches.md) has a local patch to widen that column.
+The panel is a tab in the shell's right column. Since DSH 0.1.5-rc that column is a tabbed dock (`dsh-client-ui-sidebar-right`), so SSEye registers a tab type plus a body and opens it with `ctx.sidebarRight.openTab('sseye')`; the shell draws the strip, divider, collapse rail, and float/dock controls around it. A stock install opens the column at 45% of the frame (drag ceiling 70%); that width belongs to the shell and is shared by every occupant, so this repo narrows the *default* with a one-line harness patch — [docs/harness-patches.md](docs/harness-patches.md) §1.
 
 ### Capture policy — runtime-tunable
 
@@ -114,7 +114,7 @@ pnpm test         # node --test
 ```
 ├── src/
 │   ├── index.ts          # Host half: llm/stream capture, ring buffer, /__sseye/* HTTP routes
-│   └── client/           # Client half: session-header trigger + details-column panel (React)
+│   └── client/           # Client half: session-header trigger + right-column tab body (React)
 ├── lib/                  # committed build artifacts (rebuilt by `prepare` on git installs)
 ├── docs/                 # platform field notes + local harness patches
 ├── cordis.patch.yml      # bundle patch: inserts the `sseye` plugin row into the profile
