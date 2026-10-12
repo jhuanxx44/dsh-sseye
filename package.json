@@ -1,6 +1,6 @@
 {
   "name": "dsh-sseye",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "The LLM debug console inside DeepSeek Harness — capture every model call, see everything, replay anything.",
   "keywords": [
     "dsh-plugin",
@@ -43,8 +43,7 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
+    "@deepseek-ai/cordis": "^4.0.4",
     "@types/react": "~18.3.1",
     "react": "^18.2.0",
     "tsdown": "^0.22.14"
