@@ -8,10 +8,15 @@ import { defineConfig } from 'tsdown'
  *
  * - the client artifact is a single CJS file wrapped in
  *   `window.__ModuleLoader__.load({ id, factory })`;
- * - platform modules (react, cordis, the client-runtime row, …) stay external
- *   and resolve through the loader's injected `require`;
+ * - platform modules (react, cordis, the slot registry, …) stay external and
+ *   resolve through the loader's injected `require`;
  * - everything else must inline — a require() the module table cannot answer
  *   is a guaranteed runtime throw.
+ *
+ * The list is exactly what this bundle actually requires. `@deepseek-ai/dsh-client-runtime`
+ * sat here as a leftover until 0.4.4 even though it is not imported — and it
+ * does not exist at all in DSH 0.2.0-rc.2, so a future import of it would have
+ * compiled into a require() the module table cannot answer.
  */
 const CLIENT_EXTERNALS = new Set([
   'react',
@@ -21,7 +26,6 @@ const CLIENT_EXTERNALS = new Set([
   '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-runtime/client',
 ])
 
 export default defineConfig([

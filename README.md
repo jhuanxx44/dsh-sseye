@@ -34,6 +34,12 @@ Uninstall:
 dsh plugin --profile web remove dsh-sseye
 ```
 
+### In the desktop app
+
+The Electron app owns its `desktop` profile and the CLI refuses to touch it (`profile "desktop" is managed exclusively by the Electron application`), so there is no `dsh plugin --profile desktop …` form. Install from inside the app instead: open the sidebar's **Plugins** page and add `dsh-sseye` (it runs `pnpm add` in the profile for you), then restart the app. The same page uninstalls it.
+
+SSEye runs on DSH **0.2.0-rc.2** (the current desktop build) as well as on the 0.1.x CLI line: the capture waterfall, the `/__sseye/*` routes, and the right-column tab contract are all verified against both.
+
 ## Configuration
 
 The UI is **English by default**. To switch the panel (and the truncation

@@ -4,7 +4,18 @@ Optional, out-of-tree tweaks to the installed DeepSeek Harness. **Nothing here i
 
 ## 1. Narrower right column (dsh-client-ui-layout) — ACTIVE on this machine
 
-**Status**: applied. Stock DSH opens the right column at **45% of the frame**, which is 864px on a 1920-wide display — the panel is designed to hold up around 360px, so this is a taste patch, not a correctness one.
+**Status**: applied (re-applied 2026-10-12). The DSH upgrades of 2026-09-28/29 — the npm CLI to `0.1.7-rc.2` and the desktop app to `0.2.0-rc.2` — both replaced this package and silently reverted the edit to `.45`. Re-check after every upgrade:
+
+```bash
+grep -o 'RIGHTBAR_DEFAULT_RATIO = \.[0-9]*' \
+  <dsh-install>/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
+```
+
+The stored pristine backup was refreshed at the same time (it still held the pre-upgrade build), so the revert command below now restores the `0.1.7-rc.2` artifact.
+
+**Not available on the desktop app.** The desktop build's copy of this bundle lives inside `/Applications/DeepSeek Harness.app/Contents/Resources/app.asar`, a single signed archive with no loose file to edit — rewriting it would break the app's signature. The desktop right column therefore opens at the stock `.45`; this patch only reaches installs whose packages sit in a plain `node_modules` tree (the npm CLI profiles).
+
+Stock DSH opens the right column at **45% of the frame**, which is 864px on a 1920-wide display — the panel is designed to hold up around 360px, so this is a taste patch, not a correctness one.
 
 **What the column is**: one geometry, shared by every occupant. `ctx.sidebarRight` has no per-tab width and `openTab` / `openRightbar` take no width parameter, so the only lever on the *default* is the shell's own constant. The user's own drag writes a px preference that survives resize and close (in-memory; a page reload forgets it) — `rightbar ??=` only consults the ratio while that preference is still null.
 

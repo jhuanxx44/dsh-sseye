@@ -34,6 +34,12 @@ dsh plugin --profile web add github:jhuanxx44/dsh-sseye
 dsh plugin --profile web remove dsh-sseye
 ```
 
+### 在桌面端安装
+
+Electron 桌面端独占 `desktop` profile，CLI 拒绝操作它（`profile "desktop" is managed exclusively by the Electron application`），因此没有 `dsh plugin --profile desktop …` 这种写法。请在应用内安装：打开侧边栏的 **插件（Plugins）** 页，添加 `dsh-sseye`（它会替你在 profile 里执行 `pnpm add`），然后重启应用。卸载也在同一页面。
+
+SSEye 同时适配 DSH **0.2.0-rc.2**（当前桌面版）与 0.1.x CLI：捕获 waterfall、`/__sseye/*` 路由、右栏 tab 契约都已在这两代上实测通过。
+
 ## 配置
 
 界面**默认为英文**。要切成中文（连同捕获内容里的截断标记），在 profile 的补丁层 `~/.dsh/profiles/<profile>/cordis.patch.yml` 里按 id 覆盖插件行配置：

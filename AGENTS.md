@@ -17,14 +17,15 @@ Positioning: **看见每一次调用的全部内容，改得了参数当场重�
 5. **Lifecycle discipline.** Every listener, timer, Slot registration, style, and HTTP route is owned by the plugin fiber (`ctx.on` / `ctx.effect` / returned disposers) so stop/update removes everything.
 6. **No global side effects at module scope.** All work happens inside `apply(ctx)`.
 
-## Platform facts (verified 2026-08-20 against installed DSH)
+## Platform facts (verified 2026-08-20 against installed DSH; re-verified 2026-10-12 against DSH 0.2.0-rc.2)
 
 - Waterfall event: `'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>)` — `options` is deep-frozen; listeners read, never rewrite; must yield chunks through.
 - `GenerateOptions`: `provider, model, reasoningEffort?, messages, system?, tools?, temperature?, maxTokens?, stop?, signal?, sessionId?, purpose?('compaction'|'session-title')`.
 - `StreamChunk`: `block-start | text-delta | reasoning-delta | tool-call-delta | block-end | usage | finish`.
-- Correlation: `agent/request` carries `{ agent, turn, step, signal }`; correlate with `llm/stream` by shared `AbortSignal` + agent identity + sessionId. Replayed calls lack the agent-loop marker — tag them as manual replays in the capture list.
+- Correlation: `agent/request` carries `{ agent, turn, step, signal }`; correlate with `llm/stream` by shared `AbortSignal` + agent identity + sessionId. Replayed calls lack the agent-loop marker — tag them as manual replays in the capture list. (`agent` is fused in by `agentEvents`, not passed by the dispatch site — `dsh-agent-loop` dispatches `{turn, step, signal}` and `dsh-agent`'s `agentEvents` spreads `agent` on top; the scope invariant requires it.)
+- **0.2.0-rc.2 re-verification** (desktop runtime: app 0.2.0-rc.2, bundled packages 0.2.0-rc.2 — a scratch profile booted with a local fake OpenAI-compatible provider): everything above holds. `webServer.register({ kind, path, handler })` is unchanged, and one real session produced two captured calls with correct turn/step, usage, TTFT and full message text. No break landed between 0.1.5-rc.1 and 0.2.0-rc.2.
 
-### Client shell — right column tab contract (verified 2026-09-16 against DSH 0.1.5-rc.1)
+### Client shell — right column tab contract (verified 2026-09-16 against DSH 0.1.5-rc.1; re-verified 2026-10-12 against DSH 0.2.0-rc.2)
 
 **Breaking vs. earlier versions**: the shell's right column was rebuilt from a single `details` slot into a tabbed dock. `ctx.layout.openDetails()` / `closeDetails()` and the `details` slot **no longer exist**; a plugin still registering into `details` loads cleanly and then renders nothing — the silent-failure mode that broke v0.4.2 on upgrade.
 
@@ -36,6 +37,8 @@ Positioning: **看见每一次调用的全部内容，改得了参数当场重�
 - Opening: `ctx.get('sidebarRight').openTab(kind, { revealIfOpened: true })` — idempotent per kind. Closing goes through the record's own `useTabInfo().tab.actions.close()` (session-correct), not the controller. `toggleExpanded()` collapses to the rail without closing.
 - A hidden column keeps the tab body **mounted** (the shell only sets `visibility: hidden` and moves it off-frame). Read `useTabInfo().tab.visible` for "am I showing" — `getBoundingClientRect().width` stays non-zero while collapsed, and an unmount means the tab itself is gone.
 - Obtain both services via `ctx.inject(['sidebarRightTabs', 'sidebarRight'], …)` rather than the module-level `inject` list, so a shell without the dock still loads the capture list.
+- Each `guide` entry needs an `id`: the registry indexes guide rows by it (`register` throws on a duplicate `id` **within** one definition) and the shell keys the rendered row by `JSON.stringify([providerId, id])`. One entry with `id: undefined` happens to pass the duplicate check and does render, but it is an accident, not a contract — shipped rows (`dsh-client-ui-sidebar-files`) carry one. `commandId` and `icon` are optional extras we do not use.
+- No `keepMounted` means the dock unmounts the body of a *background* tab (a tab that is not its pane's active one); it has no effect on a collapsed column, which still keeps the active tab mounted. We do not ask for `keepMounted` — the capture list re-fetches on mount and the buffer lives in the Host.
 - Geometry is viewport-relative upstream (`RIGHTBAR_DEFAULT_RATIO` 0.45 open, `RIGHTBAR_MAX_RATIO` 0.7 drag). There is **one** width for the whole column and no per-tab width in the API: `openTab` / `openRightbar` take none, and the public `ctx.layout` face exposes no width setter or reader, so a plugin cannot seed a narrower width without stomping the user's own drag. Narrowing the *default* is therefore a harness patch (`docs/harness-patches.md` §1, 0.45 → 0.28 on this machine), and `setRightbar` exists only as a private bound action.
 
 ## Non-goals

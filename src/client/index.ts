@@ -1182,7 +1182,10 @@ export function apply(ctx: ClientContext): void {
         kind: TAB_KIND,
         priority: 'extension',
         title: () => 'SSEye',
-        guide: [{ order: 60, title: () => 'SSEye', description: () => t('trigger.title') }],
+        // `id` keys the guide row (`JSON.stringify([providerId, id])`) and is the
+        // uniqueness key the registry checks, so a second entry without one would
+        // throw. Shipped guide rows (`dsh-client-ui-sidebar-files`) carry one too.
+        guide: [{ id: 'sseye', order: 60, title: () => 'SSEye', description: () => t('trigger.title') }],
       })
       return () => {
         if (sidebarRight === right) sidebarRight = undefined
